@@ -52,6 +52,37 @@ def test_calibrator_raises_before_fit():
         Calibrator().predict(_cv(0.5))
 
 
+def test_build_dataset_skips_scoreless_docs():
+    from rho.ats.dataset import build_calibration_dataset
+
+    pairs = [("a", "jd"), ("b", "jd")]
+
+    def feat(resume, jd):
+        return _cv(0.5)
+
+    def harvest(resume, jd):
+        return {"e1": {"match_score": 70.0}} if resume == "a" else {"e1": {"match_score": None}}
+
+    X, y = build_calibration_dataset(pairs, harvest, feat)
+    assert len(X) == 1 and y == [70.0]
+
+
+def test_build_dataset_skips_docs_whose_features_fail():
+    """A doc that can't be featurised is dropped, not imputed."""
+    from rho.ats.dataset import build_calibration_dataset
+
+    def feat(resume, jd):
+        if resume == "bad":
+            raise ValueError("extraction failed")
+        return _cv(0.5)
+
+    def harvest(resume, jd):
+        return {"e1": {"match_score": 70.0}}
+
+    X, y = build_calibration_dataset([("bad", "jd"), ("ok", "jd")], harvest, feat)
+    assert len(X) == 1 and y == [70.0]
+
+
 def test_calibrator_roundtrips_through_save_load(tmp_path):
     c = Calibrator()
     c.fit([_cv(v / 10) for v in range(11)], [v * 10 for v in range(11)])

@@ -350,6 +350,11 @@ git add -A && git commit -m "feat: FastAPI app with /health and /optimize shape"
 - [ ] `uvicorn rho.api.app:app` boots.
 
 ## Results (fill in when done — read by final verification session)
-- Tests passing: ___ / ___
-- Contracts frozen: yes / no
-- Notes / deviations: ___
+- Tests passing: 6 / 6 (`pytest -v` green)
+- Contracts frozen: yes — all Section-5 models live in `rho.models.*` with verbatim field names/types.
+- Notes / deviations:
+  - Env: `uv venv` with **CPython 3.13.14** (system python is 3.14, too new for the dep set). Deps installed via `uv pip install -e ".[dev]"`. Run tests with `.venv/bin/python -m pytest`.
+  - Added `.gitignore` (`.venv/`, `__pycache__/`, `*.egg-info/`, `.pytest_cache/`) — not in plan, needed to keep the venv out of git.
+  - Uvicorn boot verified on port 8123: `GET /health` → `{"status":"ok"}`.
+  - Known warning (harmless): `StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated; install httpx2 instead.`
+  - `POST /optimize` returns a hand-built placeholder `PipelineResponse`; stubs are not called (they raise). Real wiring lands in P6.

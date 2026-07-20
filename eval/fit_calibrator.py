@@ -16,33 +16,18 @@ from eval.corpus import build_pairs
 from rho.ats import Calibrator, harvest_ats
 from rho.ats.dataset import build_calibration_dataset
 from rho.jd import analyze_jd
-from rho.jd.schema import JDSchema, ReqItem
+from rho.jd.ollama import analyze_jd_schema as _ollama_schema_fn
 from rho.matching import match
-from rho.matching.coverage import extract_jd_terms
 
-# Deterministic JD analysis: KeyBERT terms instead of the vLLM path, so the
-# whole calibration run is reproducible and needs no GPU. Priority is a
-# position heuristic — KeyBERT ranks by relevance, so the top third are the
-# terms the JD leans on hardest.
-_MUST_FRACTION = 3
-
-
-def _keybert_schema_fn(jd_text: str) -> JDSchema:
-    terms = extract_jd_terms(jd_text, top_n=15)
-    cutoff = max(1, len(terms) // _MUST_FRACTION)
-    return JDSchema(
-        reasoning="deterministic KeyBERT extraction (no LLM)",
-        title=None,
-        requirements=[
-            ReqItem(text=t, kind="skill", priority="must" if i < cutoff else "nice")
-            for i, t in enumerate(terms)
-        ],
-    )
+# JD analysis runs through the LLM path (Ollama, temperature 0). The KeyBERT
+# fallback tried earlier extracted company names and boilerplate ("nashville
+# office") rather than requirements, leaving keyword_coverage and
+# fuzzy_coverage identically 0.0 across every pair.
 
 
 def feature_fn(resume, jd_text):
     """resume+jd -> ComponentVector (rho's own raw signals, pre-calibration)."""
-    return match(resume, analyze_jd(jd_text, _schema_fn=_keybert_schema_fn)).component_vector
+    return match(resume, analyze_jd(jd_text, _schema_fn=_ollama_schema_fn)).component_vector
 
 
 def main(n_pairs: int = 200, seed: int = 0, out: str = "eval/calibrator.joblib") -> dict:

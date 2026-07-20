@@ -5,6 +5,11 @@ class Settings(BaseSettings):
     app_name: str = "rho"
     extraction_model: str = "Qwen/Qwen3-0.6B"  # override in P2
     temperature: float = 0.2
+    # JD analysis via Ollama (P4): the vLLM path in rho.jd.llm needs CUDA, which
+    # the calibration host does not have. temperature is pinned to 0 at the call
+    # site for reproducibility.
+    jd_model: str = "gemma3:4b"
+    ollama_base_url: str = "http://localhost:11434"
     # Matcher semantic bands (P3). Provisional defaults — never swept against a
     # labelled match set. Exposed here so P7 can tune them without code changes.
     sem_hi: float = 0.65  # >= this cosine counts a requirement "present"

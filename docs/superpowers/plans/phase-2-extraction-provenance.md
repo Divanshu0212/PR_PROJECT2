@@ -335,9 +335,15 @@ git add -A && git commit -m "feat: extract() orchestration with provenance attac
 - [ ] LLM path constrained to `ExtractionSchema`; reasoning field first.
 - [ ] Unit tests green without a GPU (fake extractor); LLM integration test skips cleanly.
 
-## Results (fill in)
-- Model used + version: ___
-- Extraction per-field F1 (if gold set ready, else defer to P7): ___
-- Provenance-attachment accuracy on fixtures: ___
-- Outlines/vLLM API deviations: ___
-- Tests passing: ___ / ___
+## Results (filled in)
+- **Model used + version:** none run. `settings.extraction_model` is still the P0 default `Qwen/Qwen3-0.6B`. `outlines`/`vllm` were added as an optional `[llm]` extra in `pyproject.toml` and **not installed** (GPU deps, no GPU in this env). The LLM path (`rho.extraction.llm.extract_schema`) is written but has never been executed.
+- **Extraction per-field F1:** deferred to P7 — no gold set exists yet, and no LLM was run, so there is nothing to score.
+- **Provenance-attachment accuracy on fixtures:** not measured as a rate. There is no labelled fixture set for attachment yet; the P2 tests are hand-built assertions (4 unit tests over a 3-span synthetic `ProvenanceMap`), not a corpus. The metric helper that shared-context lists under "This phase produces" was **not built** — it needs the P7 gold set to be meaningful. Flagged as a carry-forward to P7.
+- **Outlines/vLLM API deviations:** none observed — but this is untested. `outlines.models.vllm(...)` + `outlines.generate.json(...)` is the pre-0.2 API and is likely to need adapting against whatever version actually gets installed. Verify before trusting.
+- **Tests passing:** 16 passed / 1 skipped (full `pytest` run). Of these, 5 are new in P2: 1 schema-mapper, 3 provenance-attachment (incl. `test_attach_leaves_empty_when_no_support`), 1 end-to-end via injected fake extractor. The skip is `tests/integration/test_extract_llm.py` (gated on `RHO_LLM_ENABLED=1`).
+
+### Deviations from plan
+- **`vllm`/`outlines` placed in an optional `[llm]` extra**, not in `dependencies` as Task 3 Step 1 suggested. Keeps `pip install -e ".[dev]"` working without a GPU.
+- **`tests/unit/test_stubs.py` was edited.** P1 had already repointed its `NotImplementedError` assertion from `ingest` to `extract("", None)`; implementing `extract` in this phase broke it (it now reaches the real LLM path and raises `ModuleNotFoundError: No module named 'outlines'`). Assertion moved on to `analyze_jd("")`, still a genuine P3 stub. `extract` is covered by the new P2 tests instead.
+- **`extract()` signature gained `_schema_fn=None`** (per Task 4), a test seam. The frozen 2-arg call from shared-context Section 6 is unchanged for callers.
+- No retry / review-queue wrapper around `_schema_fn` — plan defers it to P6.

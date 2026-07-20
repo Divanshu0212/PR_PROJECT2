@@ -1,3 +1,4 @@
+from rho.extraction import extract
 from rho.extraction.provenance_attach import attach_provenance, find_prov
 from rho.extraction.schema import ExtractionSchema, to_structured
 from rho.models.provenance import ProvenanceMap, SourceSpan
@@ -67,3 +68,18 @@ def test_attach_leaves_empty_when_no_support():
     r = StructuredResume(name="Nonexistent Person")
     r2 = attach_provenance(r, pm)
     assert r2.name_prov == []  # never invent provenance
+
+
+def test_extract_end_to_end_with_fake_llm():
+    pm = _pm()
+    md = "Alice Johnson\nSkills: Python, FastAPI, AWS\nAcme Corp Backend Engineer"
+    fake = lambda m: ExtractionSchema(
+        reasoning="x",
+        name="Alice Johnson",
+        skills=["Python", "AWS"],
+        work=[{"company": "Acme Corp", "title": "Backend Engineer"}],
+    )
+    r = extract(md, pm, _schema_fn=fake)
+    assert r.name == "Alice Johnson"
+    assert r.name_prov == ["p:d:0"]
+    assert r.work[0].company_prov == ["p:d:2"]

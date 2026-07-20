@@ -26,6 +26,20 @@ CATEGORY_TITLE_HINTS = {
     "TEACHER": ["teacher", "instructor", "tutor", "professor"],
     "CHEF": ["chef", "cook", "culinary", "kitchen"],
     "DESIGNER": ["designer", "design", "graphic", "ux", "ui"],
+    "ADVOCATE": ["advocate", "attorney", "legal", "lawyer", "paralegal", "counsel"],
+    "AGRICULTURE": ["agricultur", "farm", "crop", "horticultur", "livestock"],
+    "APPAREL": ["apparel", "fashion", "garment", "textile", "merchandis"],
+    "ARTS": ["art", "creative", "photograph", "illustrat", "musician"],
+    "AUTOMOBILE": ["automotive", "vehicle", "mechanic", "auto ", "technician"],
+    "AVIATION": ["aviation", "pilot", "flight", "aircraft", "airline"],
+    "BANKING": ["bank", "teller", "loan", "credit", "mortgage"],
+    "BPO": ["call center", "customer service", "support agent", "representative"],
+    "BUSINESS-DEVELOPMENT": ["business development", "partnership", "account executive"],
+    "CONSTRUCTION": ["construction", "contractor", "foreman", "carpenter", "site manager"],
+    "CONSULTANT": ["consultant", "consulting", "advisor", "strategist"],
+    "DIGITAL-MEDIA": ["digital", "social media", "content", "seo", "marketing"],
+    "FITNESS": ["fitness", "trainer", "coach", "gym", "wellness"],
+    "PUBLIC-RELATIONS": ["public relations", "communications", "pr ", "media relations"],
 }
 
 _BULLET_SPLIT = re.compile(r"\s{2,}|\n")
@@ -113,7 +127,9 @@ def build_pairs(
     n_pairs: int = 200,
     resume_csv: str = "Resume.csv",
     jd_csv: str = "training_data.csv",
-    same_domain_ratio: float = 0.5,
+    # Weighted toward same-domain so literal coverage has real overlap to find;
+    # the cross-domain remainder keeps a low-match tail in the target range.
+    same_domain_ratio: float = 0.8,
     seed: int = 0,
 ) -> list[tuple[StructuredResume, str]]:
     rng = random.Random(seed)
@@ -124,10 +140,20 @@ def build_pairs(
     resumes = resumes[resumes.Resume_str.str.len().between(800, 12000)]
     jds = jds[jds.job_description.str.len().between(400, 8000)]
 
+    # Categories the JD corpus can actually serve; résumés outside these can
+    # never be same-domain paired and would silently dilute the ratio.
+    pairable = {
+        c
+        for c in resumes.Category.unique()
+        if jds.position_title.apply(lambda t: _matches_category(t, c)).any()
+    }
+    same_pool = resumes[resumes.Category.isin(pairable)]
+
     pairs = []
     n_same = int(n_pairs * same_domain_ratio)
     for i in range(n_pairs):
-        r = resumes.sample(1, random_state=seed + i).iloc[0]
+        pool = same_pool if (i < n_same and len(same_pool)) else resumes
+        r = pool.sample(1, random_state=seed + i).iloc[0]
         candidates = jds[jds.position_title.apply(lambda t: _matches_category(t, r.Category))]
         if i < n_same and len(candidates):
             jd = candidates.sample(1, random_state=seed + i).iloc[0]

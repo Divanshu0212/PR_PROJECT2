@@ -1,3 +1,5 @@
+import re
+
 from functools import lru_cache
 
 from rapidfuzz import fuzz
@@ -43,13 +45,37 @@ def resume_text_terms(resume) -> list[str]:
     return [t for t in terms if t]
 
 
+# Function words carry no skill signal and would manufacture overlap between
+# unrelated phrases ("search and experience" vs "welding and pipefitting").
+_STOPWORDS = frozenset(
+    "a an the and or of in on for to with at by from as is are be experience "
+    "years year strong excellent good ability able must should will".split()
+)
+
+
+def _content_words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9+#.]+", text.lower()) if w not in _STOPWORDS}
+
+
 def keyword_coverage(req_terms: list[str], resume_skills: list[str]) -> float:
-    """Fraction of requirement terms literally present in the resume skills."""
+    """Mean per-requirement content-word overlap with the résumé.
+
+    Whole-string containment only fires for single tokens: a phrasal
+    requirement like "account project management experience" is absent verbatim
+    from every résumé, even one saying "key account management". Scoring each
+    requirement by the fraction of its content words present keeps exact
+    single-token behaviour (1.0 or 0.0) while giving phrases partial credit.
+    """
     if not req_terms:
         return 1.0
-    blob = " ".join(s.lower() for s in resume_skills)
-    hit = sum(1 for t in req_terms if t.lower() in blob)
-    return hit / len(req_terms)
+    blob_words = _content_words(" ".join(resume_skills))
+    scores = []
+    for term in req_terms:
+        words = _content_words(term)
+        if not words:
+            continue
+        scores.append(len(words & blob_words) / len(words))
+    return (sum(scores) / len(scores)) if scores else 0.0
 
 
 def fuzzy_coverage(

@@ -19,6 +19,28 @@ def test_keyword_and_fuzzy_coverage():
     assert fuzzy_coverage(reqs, skills) == 1.0  # typo caught by fuzzy
 
 
+def test_keyword_coverage_credits_partial_phrase_overlap():
+    """Whole-string containment never fires for phrasal requirements: a résumé
+    saying "key account management" does not contain the literal string
+    "account project management experience" even though the skill is present."""
+    skills = ["key account management", "market planning", "SQL"]
+    assert keyword_coverage(["account project management experience"], skills) > 0.5
+    # An unrelated requirement still scores zero.
+    assert keyword_coverage(["kubernetes cluster orchestration"], skills) == 0.0
+
+
+def test_keyword_coverage_still_exact_for_single_tokens():
+    """Phase 3 behaviour for skill tokens is unchanged."""
+    reqs = ["Python", "Kubernetes", "AWS"]
+    skills = ["python", "aws", "kubernets"]
+    assert keyword_coverage(reqs, skills) == 2 / 3
+
+
+def test_keyword_coverage_ignores_stopwords_in_requirements():
+    """"and"/"of" must not manufacture overlap against unrelated résumés."""
+    assert keyword_coverage(["search and ecommerce experience"], ["welding and pipefitting"]) == 0.0
+
+
 def test_coverage_searches_whole_resume_not_only_skills():
     """Evidence for a requirement often lives in a bullet, not the skills list."""
     resume = StructuredResume(

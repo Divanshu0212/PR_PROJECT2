@@ -322,8 +322,22 @@ git add -A && git commit -m "feat: deterministic matcher with prov-linked gaps"
 - [ ] `predicted_score == 0.0` (Phase 4 will set it).
 - [ ] `pytest tests/unit/test_matching.py tests/unit/test_jd.py -v` green.
 
-## Results (fill in)
-- Embedding model + version: ___
-- Semantic thresholds tuned to: sem_hi=___, sem_lo=___
-- Tests passing: ___ / ___
-- Notes: ___
+## Results (filled in)
+- **Embedding model + version:** `all-mpnet-base-v2` via `sentence-transformers` **5.6.0** (CPU). First test run downloads ~420MB and takes ~138s; cached runs ~7s.
+- **Semantic thresholds tuned to:** sem_hi=**0.65**, sem_lo=**0.45** — i.e. *not* tuned, these are the plan's proposed defaults carried over unchanged. No threshold sweep was run; there is no labelled match set to tune against yet. Treat as provisional until P7.
+- **Tests passing:** 20 passed / 1 skipped (full suite). 4 new in P3: 1 JD-mapper (fake LLM), 1 embedder cosine, 1 coverage, 1 matcher-with-prov-gaps. Skip is still the P2 LLM integration test (`RHO_LLM_ENABLED=1`).
+- **JD LLM path never executed.** `src/rho/jd/llm.py` mirrors `extraction/llm.py` (same pre-0.2 Outlines API, same `[llm]` extra, still uninstalled). Written but unrun — same caveat as P2.
+
+### Known issue: `ComponentVector.semantic_similarity` is misnamed
+As specified by the plan, this field is set to `count(present|weak) / count(gaps)` — a **match-rate**, not a similarity. It never touches a cosine value. Verified with a 3-requirement probe (skills `Python/AWS/Docker`):
+
+```
+keyword_coverage 0.333   semantic_similarity 1.0   fuzzy_coverage 0.333
+```
+
+`semantic_similarity` reads 1.0 while only 1 of 3 requirements is literally covered, because "Kubernetes" scored *weak* and "containerization" *present* off Docker proximity. The number is correct per the written formula but will be read as a cosine by anyone consuming the vector — and P4 feeds this vector to the calibrator, so a misread here propagates into the headline score. Implemented as written (contract is frozen from P0); flagging for a P4 decision: either rename, or redefine as a real mean-cosine.
+
+### Deviations from plan
+- **`_skill_evidence` no longer `zip`s `skills` with `skills_prov`.** The plan's `zip` silently drops trailing skills when `skills_prov` is shorter (legal — prov is only filled by P2 attachment, hand-built resumes often omit it), meaning a skill could fail to match purely for lacking provenance. Replaced with an index-guarded `_prov_for()` that returns `[]` for a missing prov and keeps the skill matchable.
+- **`tests/unit/test_stubs.py` repointed twice this phase** — first off `analyze_jd`, then off `match`, as each stopped being a stub. Now asserts on `harvest_ats` (P4). This is the third phase running that this test needed hand-editing; it should be restructured to enumerate stubs dynamically rather than naming one.
+- Semantic thresholds and the KeyBERT dependency: `keybert` is installed per Task 2's dep list but **is not used** — `keyword_coverage` is plain substring matching, not KeyBERT term extraction. The architecture note promises KeyBERT-extracted JD terms; that is unimplemented. Carry-forward.

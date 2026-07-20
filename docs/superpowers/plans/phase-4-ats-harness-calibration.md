@@ -40,40 +40,47 @@ The whole C2 claim depends on getting ≥2 self-hostable ATS engines whose **par
 
 ---
 
-### Task 0: Engine survey & go/no-go (research spike, no test)
+### Task 0: Engine survey & go/no-go — ✅ DONE
 
-**Files:** Create `docs/superpowers/plans/phase-4-engine-survey.md` (findings).
+**Findings:** see `phase-4-engine-survey.md`. **Decision: GO.** Concrete engines selected:
 
-- [ ] Survey self-hostable ATS / open résumé-parser + matcher stacks. Candidate directions to evaluate:
-  - Open applicant-tracking systems (e.g. OpenCATS-class) — do they expose a résumé parse result and/or a candidate-JD match score via DB/API?
-  - Open résumé parsers (spaCy/pyresparser-class, the Qwen2.5-based successor noted in the report) — parse-field recovery as target.
-  - Open matcher stacks / `Keywords4CV`-style scorers — a numeric match as target.
-- [ ] For each: can you run it headless (Docker/CLI/lib) and read a numeric/structured output programmatically? Record install method + output shape.
-- [ ] **Decision:** pick ≥2 engines with harvestable output. If <2 expose a *match score*, adopt the **parse-injection fallback** (Task 0b) as the target and note the reframing ("parse-ability calibration").
-- [ ] Write findings + decision into `phase-4-engine-survey.md`. **Do not proceed until decided.**
+| Engine | Role | Harvest | Effort | License |
+|---|---|---|---|---|
+| **Resume-Matcher** (srbhr) | primary match score | HTTP (FastAPI/Docker, local Ollama, Swagger `/docs`) | LOW | Apache 2.0 |
+| **ats-screener** (sunnypatell) | 6 platform-profile scores (5 dims) | port TS scoring rules → headless runner (preferred, deterministic) OR drive `/api/analyze` | MEDIUM | MIT |
+| **OpenCATS** | real-parser parse-recovery (Task 0b target) | read parsed fields from MySQL after import | MEDIUM | GPL-family (run as service; don't vendor code) |
 
-**Task 0b (fallback only, if adopted): parse-injection target.**
-- [ ] Build `inject_known_fields(resume_text) -> (resume_text, known_fields)` and, per engine/parser, `recovery_rate(parsed, known_fields) -> float`. Target `y` = mean recovery across engines × 100. This is real-engine-grounded and reproducible.
+Two match-score engines (Resume-Matcher + ats-screener) satisfy "≥2 harvestable engines." OpenCATS powers the parse-injection dimension.
+
+**Determinism (required for the reproducibility claim):** pin Ollama model + `temperature=0` (Resume-Matcher); prefer ats-screener's ported no-LLM rule path; OpenCATS is deterministic by construction. Record model hashes.
+
+**Task 0b (parse-injection) — now RECOMMENDED (not just fallback).** OpenCATS makes it cheap and it gives the paper a *second* calibration story (real parser mechanics).
+- [ ] Build `inject_known_fields(resume_text) -> (resume_text, known_fields)` and `recovery_rate(parsed, known_fields) -> float`. Parse-recovery target `y_parse` = mean recovery across parsers × 100. Report SEPARATELY from the match-score target `y` (do not fold together).
 
 ---
 
-### Task 1: Engine adapter interface + first engine
+### Task 1: Engine adapter interface + concrete engines
+
+**Concrete engines (from Task 0 — build in this order):**
+1. `engines/resume_matcher.py` — HTTP client to dockerized Resume-Matcher (`docker run ghcr.io/srbhr/resume-matcher:latest`); POST résumé+JD, read `match_score` + gaps from JSON. **Build FIRST (lowest effort).** Read `/docs` for exact field names.
+2. `engines/ats_screener.py` — wrapper over ats-screener's 6 platform scoring rules (port TS → Node subprocess or Python reimpl); exposes 6 per-platform scores + 5 dimensions.
+3. `engines/opencats.py` — MySQL-read parse-recovery adapter (feeds Task 0b `y_parse`).
 
 **Files:**
-- Create: `src/rho/ats/engines/base.py`, `src/rho/ats/engines/<engine1>.py`
+- Create: `src/rho/ats/engines/base.py`, `src/rho/ats/engines/resume_matcher.py` (first), then `ats_screener.py`, `opencats.py`.
 - Test: `tests/integration/test_ats_harness.py` (skips unless engine available)
 
 **Interfaces:**
-- Produces: `class ATSEngine` (protocol) with `.run(file_bytes, filename, jd_text) -> dict` returning at minimum `{"engine": name, "parse_fields": {...}|None, "match_score": float|None, "raw": ...}`. Concrete engine1 adapter implements it.
+- Produces: `class ATSEngine` (protocol) with `.run(file_bytes, filename, jd_text) -> dict` returning at minimum `{"engine": name, "parse_fields": {...}|None, "match_score": float|None, "raw": ...}`. `ats_screener` may return `{"engine":"ats_screener","match_score": <mean of 6>, "raw": {"per_platform": {...}}}`. Each concrete adapter implements it.
 
 - [ ] **Step 1: Write skipping integration test**
 ```python
 # tests/integration/test_ats_harness.py
 import os, pytest
 pytestmark = pytest.mark.skipif(os.getenv("RHO_ATS_ENABLED") != "1", reason="no ATS engine")
-def test_engine1_runs_and_returns_output():
-    from rho.ats.engines.engine1 import Engine1        # rename to real engine
-    out = Engine1().run(b"Alice\nPython\nAWS", "r.txt", "need python")
+def test_resume_matcher_runs_and_returns_output():
+    from rho.ats.engines.resume_matcher import ResumeMatcher   # dockerized HTTP engine
+    out = ResumeMatcher().run(b"Alice\nPython\nAWS", "r.txt", "need python")
     assert out["engine"]
     assert ("parse_fields" in out) or ("match_score" in out)
 ```
@@ -81,7 +88,7 @@ def test_engine1_runs_and_returns_output():
 - [ ] **Step 2: Run to verify skip**
 Run: `pytest tests/integration/test_ats_harness.py -v` → SKIP.
 
-- [ ] **Step 3: Implement base + engine1**
+- [ ] **Step 3: Implement base + ResumeMatcher**
 ```python
 # src/rho/ats/engines/base.py
 from typing import Protocol
@@ -89,14 +96,14 @@ class ATSEngine(Protocol):
     name: str
     def run(self, file_bytes: bytes, filename: str, jd_text: str) -> dict: ...
 ```
-Implement `engine1.py` per Task-0 findings (Docker/CLI/lib call → normalized dict). Keep raw output under `out["raw"]`.
+Implement `resume_matcher.py`: HTTP client to the dockerized service (base URL from `settings`/env, e.g. `http://localhost:3000`), POST résumé bytes + `jd_text`, read the score JSON (field names off `/docs`), normalize to `{"engine":"resume_matcher","match_score":<float>,"parse_fields":None,"raw":<json>}`. Pin the Ollama model + `temperature=0`.
 
 - [ ] **Step 4: Commit**
 ```bash
-git add -A && git commit -m "feat: ATS engine adapter interface + first engine"
+git add -A && git commit -m "feat: ATS engine adapter interface + Resume-Matcher HTTP engine"
 ```
 
-- [ ] **Step 5: Repeat for engine2** (second file, same protocol). Commit.
+- [ ] **Step 5: Add ats_screener + opencats** (same protocol; `ats_screener` = ported 6-profile rules, `match_score` = mean of 6, per-platform under `raw`; `opencats` = MySQL parse-recovery, `parse_fields` set, `match_score` None). Commit each.
 
 ---
 
@@ -140,7 +147,7 @@ def harvest_ats(file_bytes: bytes, filename: str, jd_text: str) -> dict:
     from rho.ats.registry import ENGINES     # list built in Task 1
     return {e.name: e.run(file_bytes, filename, jd_text) for e in ENGINES}
 ```
-Create `src/rho/ats/registry.py` exposing `ENGINES = [Engine1(), Engine2()]` (guard construction so import doesn't require the engines at unit-test time — lazy or try/except).
+Create `src/rho/ats/registry.py` exposing `ENGINES = [ResumeMatcher(), ATSScreener()]` (guard construction so import doesn't require the engines at unit-test time — lazy or try/except). OpenCATS lives in a separate parse-recovery path, not in the match-score `ENGINES` list.
 
 - [ ] **Step 4: Run to verify pass**
 Run: `pytest tests/unit/test_ats_calibrator.py -k to_target -v` → PASS.

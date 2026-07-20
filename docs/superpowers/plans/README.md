@@ -29,7 +29,7 @@ Novelty = a **provenance ID space** threading all 4 pipeline stages (C1), with
 
 ## Known risks (flagged in the docs)
 
-- **Phase 4 is the make-or-break.** It needs ≥2 self-hostable ATS engines with harvestable output. Do Phase-4 **Task 0 (survey + go/no-go) first**; a parse-injection fallback preserves the C2 novelty if no engine exposes a match score.
+- **Phase 4 is the make-or-break — but Task 0 survey is DONE: decision GO** (see `phase-4-engine-survey.md`). Engines chosen: **Resume-Matcher** (Apache-2.0, HTTP/Docker, local Ollama — build first), **ats-screener** (MIT, 6 platform-profile scores via ported rules), **OpenCATS** (real parser, MySQL parse-recovery for the parse-injection dimension). Determinism: pin model + temperature=0. Start Phase 4 at Task 1.
 - **Signature change:** Phase 5 extends `rewrite(resume, gaps)` → `rewrite(resume, gaps, prov)`. Shared context Section 6 gets updated there; Phase 6 caller already passes `prov`.
 
 ## Final verification (do in the main chat after all phases)

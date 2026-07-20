@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 
 from eval.corpus import build_pairs
 from rho.ats import Calibrator, harvest_ats
+from rho.ats.aggregate import to_match_target
 from rho.ats.dataset import build_calibration_dataset
 from rho.jd import analyze_jd
 from rho.jd.ollama import analyze_jd_schema as _ollama_schema_fn
@@ -32,7 +33,7 @@ def feature_fn(resume, jd_text):
 
 def main(n_pairs: int = 200, seed: int = 0, out: str = "eval/calibrator.joblib") -> dict:
     pairs = build_pairs(n_pairs=n_pairs, seed=seed)
-    X, y = build_calibration_dataset(pairs, harvest_ats, feature_fn)
+    X, y = build_calibration_dataset(pairs, harvest_ats, feature_fn, target_fn=to_match_target)
     if len(X) < 10:
         raise SystemExit(f"only {len(X)} usable pairs; need more data to fit")
 

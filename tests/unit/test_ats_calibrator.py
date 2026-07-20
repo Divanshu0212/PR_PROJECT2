@@ -31,6 +31,50 @@ def test_to_target_raises_when_no_engine_scored():
         to_target({"e1": {"match_score": None}})
 
 
+def _engine_out(keyword, formatting=100, sections=75, experience=40, education=70):
+    # ats-screener's only JD-dependent dimension is keywordMatch; the rest
+    # score the résumé on its own and do not move with the job description.
+    dims = {
+        "formatting": formatting,
+        "keywordMatch": keyword,
+        "sections": sections,
+        "experience": experience,
+        "education": education,
+    }
+    return {
+        "e1": {
+            "match_score": 50.0,
+            "raw": {"breakdown": {"Workday": dims, "Lever": dims}},
+        }
+    }
+
+
+def test_match_target_uses_jd_dependent_dimensions_only():
+    """The composite overallScore is dominated by résumé-intrinsic quality
+    (formatting/sections/education), which does not vary with the JD."""
+    from rho.ats.aggregate import to_match_target
+
+    strong = to_match_target(_engine_out(keyword=80))
+    weak = to_match_target(_engine_out(keyword=10))
+    assert strong > weak
+    # Résumé-intrinsic dimensions must not move the target at all.
+    assert to_match_target(_engine_out(80, formatting=20, education=10)) == strong
+
+
+def test_match_target_is_zero_to_hundred():
+    from rho.ats.aggregate import to_match_target
+
+    assert to_match_target(_engine_out(keyword=0)) == 0.0
+    assert to_match_target(_engine_out(keyword=100)) == 100.0
+
+
+def test_match_target_raises_when_no_breakdown_present():
+    from rho.ats.aggregate import to_match_target
+
+    with pytest.raises(ValueError):
+        to_match_target({"e1": {"match_score": 50.0, "raw": {}}})
+
+
 def test_calibrator_learns_monotone_relationship():
     X = [_cv(v / 10) for v in range(11)]
     y = [v * 10 for v in range(11)]

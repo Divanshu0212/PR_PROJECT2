@@ -30,6 +30,51 @@ CATEGORY_TITLE_HINTS = {
 
 _BULLET_SPLIT = re.compile(r"\s{2,}|\n")
 
+# Section headers that introduce skill lists in this corpus's formatting.
+_SKILL_HEADER = re.compile(
+    r"^(skills?|highlights?|core competenc(y|ies)|technical skills?|areas of expertise)\b",
+    re.I,
+)
+# Headers that end the skills section.
+_OTHER_HEADER = re.compile(
+    r"^(summary|experience|education|professional|work history|accomplishments|"
+    r"certifications?|affiliations?|interests?|references?)\b",
+    re.I,
+)
+
+
+def _extract_skills(lines: list[str], limit: int = 25) -> list[str]:
+    """Pull skills from the résumé's own skills/highlights section.
+
+    Length-based heuristics pick up section headers and job titles instead of
+    skills, which flattens the feature vector across résumés and leaves the
+    calibrator regressing on noise.
+    """
+    skills: list[str] = []
+    in_section = False
+    for ln in lines:
+        if _SKILL_HEADER.match(ln):
+            in_section = True
+            continue
+        if _OTHER_HEADER.match(ln):
+            in_section = False
+            continue
+        if not in_section:
+            continue
+        # Skill sections are comma- or bullet-delimited runs of short phrases.
+        for token in re.split(r"[,;•|]", ln):
+            token = token.strip(" .\t-")
+            if 2 <= len(token) <= 40 and not token.isdigit():
+                skills.append(token)
+    # Deduplicate, preserving order.
+    seen, out = set(), []
+    for s in skills:
+        key = s.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(s)
+    return out[:limit]
+
 
 def _to_structured(resume_str: str, category: str) -> StructuredResume:
     """Cheap heuristic parse of the corpus text into StructuredResume.
@@ -42,8 +87,7 @@ def _to_structured(resume_str: str, category: str) -> StructuredResume:
     headline = lines[0] if lines else category
 
     bullets = [ln for ln in lines if 40 <= len(ln) <= 300][:20]
-    # Skills: short comma-free fragments that look like technology/skill tokens.
-    skills = [ln for ln in lines if 3 <= len(ln) <= 30 and "," not in ln][:25]
+    skills = _extract_skills(lines)
 
     edu_text = " ".join(
         ln for ln in lines if re.search(r"\b(BS|BA|MS|MBA|PhD|Bachelor|Master|University|College)\b", ln)

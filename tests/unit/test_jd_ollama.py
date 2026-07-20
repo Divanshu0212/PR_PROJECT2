@@ -7,6 +7,37 @@ import pytest
 from rho.jd.ollama import _build_payload, _parse_response
 
 
+def test_prompt_demands_short_skill_tokens():
+    """Coverage matches requirement text literally, so requirements must be
+    skill tokens ("Python"), not restatements of JD sentences."""
+    payload = _build_payload("need python", model="gemma3:4b")
+    prompt = payload["messages"][0]["content"]
+    assert "words" in prompt.lower()
+    # The prompt must show the shape it wants, not just describe it.
+    assert "Python" in prompt
+
+
+def test_parse_response_drops_sentence_length_requirements():
+    raw = {
+        "message": {
+            "content": json.dumps(
+                {
+                    "reasoning": "r",
+                    "requirements": [
+                        {"text": "Python", "kind": "skill", "priority": "must"},
+                        {
+                            "text": "must be authorized to work in the usa and willing to learn",
+                            "kind": "experience",
+                            "priority": "must",
+                        },
+                    ],
+                }
+            )
+        }
+    }
+    assert [r.text for r in _parse_response(raw).requirements] == ["Python"]
+
+
 def test_payload_pins_temperature_and_schema():
     payload = _build_payload("need python", model="gemma3:4b")
     assert payload["model"] == "gemma3:4b"

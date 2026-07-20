@@ -14,16 +14,27 @@ from rho.jd.schema import JDSchema, ReqItem
 
 _PROMPT = """You extract structured requirements from a job description. Rules:
 - Extract ONLY requirements stated in the text. Never invent or infer.
+- Each `text` MUST be a short skill/tool token of 1-4 words, as it would appear
+  in a résumé's skills list. Name the skill; do not restate the sentence.
+    GOOD: "Python", "AWS", "customer service", "Bootstrap", "SQL"
+    BAD:  "must be authorized to work in the usa", "communicate with customers
+          via phone email and chat", "5+ years of relevant experience"
+- Skip boilerplate that is not a skill: work authorization, location, age,
+  company names, "must be excited to learn".
 - Classify each requirement's `kind`: skill, tool, title, cert, or experience.
 - Classify `priority`: "must" for required/essential items, "nice" for
   preferred/bonus/plus items. If the text does not mark it as optional, use "must".
 - Set `years` only when the text states a number of years; otherwise null.
-- Prefer concrete skills and tools over company names, locations, or boilerplate.
 - Fill the `reasoning` field first, briefly, then the data fields.
 Job description:
 ---
 {jd_text}
 ---"""
+
+# Coverage matches requirement text literally against résumé strings, so a
+# sentence-length requirement can never match and would silently pin
+# keyword_coverage and fuzzy_coverage at 0.
+_MAX_REQUIREMENT_WORDS = 5
 
 # Mirrors JDSchema; Ollama enforces this during decoding.
 _FORMAT = {
@@ -73,10 +84,14 @@ def _parse_response(raw: dict) -> JDSchema:
     requirements = []
     for item in data.get("requirements", []):
         try:
-            requirements.append(ReqItem(**item))
+            req = ReqItem(**item)
         except Exception:
             # No silent fills: a malformed item is dropped, never defaulted.
             continue
+        if len(req.text.split()) > _MAX_REQUIREMENT_WORDS:
+            # The model restated a sentence instead of naming the skill.
+            continue
+        requirements.append(req)
 
     return JDSchema(
         reasoning=data.get("reasoning", ""),

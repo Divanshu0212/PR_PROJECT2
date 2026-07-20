@@ -7,6 +7,9 @@ output beat using raw cosine as the score?
 
 import argparse
 import json
+import os
+import time
+from datetime import datetime, timezone
 
 import numpy as np
 from scipy.stats import spearmanr
@@ -31,9 +34,49 @@ def feature_fn(resume, jd_text):
     return match(resume, analyze_jd(jd_text, _schema_fn=_ollama_schema_fn)).component_vector
 
 
-def main(n_pairs: int = 200, seed: int = 0, out: str = "eval/calibrator.joblib") -> dict:
+PROGRESS_PATH = "eval/progress.json"
+
+
+def _progress_writer(path: str, started: float):
+    """Write run progress to `path` after every pair so a viewer can poll it."""
+
+    def write(index: int, total: int, status: str, kept: int) -> None:
+        elapsed = time.time() - started
+        rate = elapsed / index if index else 0.0
+        payload = {
+            "index": index,
+            "total": total,
+            "kept": kept,
+            "skipped": index - kept,
+            "last_status": status,
+            "elapsed_seconds": round(elapsed, 1),
+            "seconds_per_pair": round(rate, 1),
+            "eta_seconds": round(rate * (total - index), 1),
+            "done": index >= total,
+            "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        tmp = f"{path}.tmp"
+        with open(tmp, "w") as fh:
+            json.dump(payload, fh, indent=2)
+        os.replace(tmp, path)  # atomic: a poller never reads a half-written file
+
+    return write
+
+
+def main(
+    n_pairs: int = 200,
+    seed: int = 0,
+    out: str = "eval/calibrator.joblib",
+    progress_path: str = PROGRESS_PATH,
+) -> dict:
     pairs = build_pairs(n_pairs=n_pairs, seed=seed)
-    X, y = build_calibration_dataset(pairs, harvest_ats, feature_fn, target_fn=to_match_target)
+    X, y = build_calibration_dataset(
+        pairs,
+        harvest_ats,
+        feature_fn,
+        target_fn=to_match_target,
+        on_progress=_progress_writer(progress_path, time.time()),
+    )
     if len(X) < 10:
         raise SystemExit(f"only {len(X)} usable pairs; need more data to fit")
 
@@ -69,6 +112,17 @@ def main(n_pairs: int = 200, seed: int = 0, out: str = "eval/calibrator.joblib")
         f"\ncalibrated MAE={mae:.2f} Spearman={rho:.3f} | "
         f"cosine-baseline MAE={cos_mae:.2f} Spearman={cos_rho:.3f}"
     )
+
+    # Fold the results into the progress file so a viewer shows them on finish.
+    try:
+        with open(progress_path) as fh:
+            payload = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        payload = {}
+    payload.update({"done": True, "metrics": metrics})
+    with open(progress_path, "w") as fh:
+        json.dump(payload, fh, indent=2)
+
     return metrics
 
 

@@ -127,6 +127,30 @@ def test_build_dataset_skips_docs_whose_features_fail():
     assert len(X) == 1 and y == [70.0]
 
 
+def test_build_dataset_reports_progress_per_pair():
+    """Progress must fire for every pair, including skipped ones, so a long
+    run's remaining count stays accurate."""
+    from rho.ats.dataset import build_calibration_dataset
+
+    seen = []
+
+    def feat(resume, jd):
+        if resume == "bad":
+            raise ValueError("boom")
+        return _cv(0.5)
+
+    def harvest(resume, jd):
+        return {"e1": {"match_score": None if resume == "noscore" else 70.0}}
+
+    pairs = [("a", "jd"), ("noscore", "jd"), ("bad", "jd")]
+    build_calibration_dataset(pairs, harvest, feat, on_progress=lambda **kw: seen.append(kw))
+
+    assert [s["index"] for s in seen] == [1, 2, 3]
+    assert [s["total"] for s in seen] == [3, 3, 3]
+    assert [s["status"] for s in seen] == ["ok", "skipped_no_score", "skipped_no_features"]
+    assert seen[0]["kept"] == 1 and seen[2]["kept"] == 1
+
+
 def test_calibrator_roundtrips_through_save_load(tmp_path):
     c = Calibrator()
     c.fit([_cv(v / 10) for v in range(11)], [v * 10 for v in range(11)])

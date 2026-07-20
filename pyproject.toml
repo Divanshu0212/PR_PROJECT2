@@ -13,6 +13,9 @@ dependencies = [
     "sentence-transformers>=3",
     "keybert>=0.8",
     "numpy",
+    "scikit-learn>=1.4",
+    "scipy>=1.11",
+    "joblib",
 ]
 
 [project.optional-dependencies]

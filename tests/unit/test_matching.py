@@ -38,3 +38,31 @@ def test_match_builds_vector_and_prov_gaps():
     k8s_gap = next(g for g in mr.gaps if g.requirement.text == "Kubernetes")
     assert k8s_gap.status == "absent"
     assert k8s_gap.evidence_prov == []
+
+
+def test_semantic_similarity_is_mean_cosine_not_match_rate():
+    """semantic_similarity must reflect actual embedding similarity, not gap counts."""
+    resume = StructuredResume(
+        name="A", skills=["Python", "AWS", "Docker"], skills_prov=[["p:d:1"], ["p:d:2"], ["p:d:3"]]
+    )
+    reqs = RequirementSet(
+        requirements=[
+            Requirement(text="Python", kind="skill", priority="must"),
+            Requirement(text="Kubernetes", kind="skill", priority="must"),
+            Requirement(text="containerization", kind="skill", priority="nice"),
+        ]
+    )
+    mr = match(resume, reqs)
+    sem = mr.component_vector.semantic_similarity
+    # all three reqs score present/weak, so the old match-rate formula returned exactly 1.0
+    assert sem < 1.0, "semantic_similarity is still the present/weak match-rate"
+    # exact-match req ("Python") pins the mean well above zero
+    assert sem > 0.3
+
+
+def test_semantic_similarity_zero_when_no_skills():
+    resume = StructuredResume(name="A")
+    reqs = RequirementSet(
+        requirements=[Requirement(text="Python", kind="skill", priority="must")]
+    )
+    assert match(resume, reqs).component_vector.semantic_similarity == 0.0

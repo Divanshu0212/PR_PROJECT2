@@ -86,3 +86,19 @@ def test_extract_jd_terms_empty_text():
     from rho.matching.coverage import extract_jd_terms
 
     assert extract_jd_terms("") == []
+
+
+def test_semantic_thresholds_come_from_settings(monkeypatch):
+    """Thresholds must be tunable (P7 sweep), not hardcoded in the matcher."""
+    from rho.config import settings
+
+    resume = StructuredResume(name="A", skills=["Docker"], skills_prov=[["p:d:1"]])
+    reqs = RequirementSet(
+        requirements=[Requirement(text="Kubernetes", kind="skill", priority="must")]
+    )
+    # Docker~Kubernetes sits in the weak band under defaults
+    assert match(resume, reqs).gaps[0].status == "weak"
+    # raising sem_lo above that cosine must demote it to absent
+    monkeypatch.setattr(settings, "sem_lo", 0.99)
+    monkeypatch.setattr(settings, "sem_hi", 0.995)
+    assert match(resume, reqs).gaps[0].status == "absent"

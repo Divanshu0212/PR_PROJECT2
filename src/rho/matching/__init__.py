@@ -1,5 +1,6 @@
 from rapidfuzz import fuzz
 
+from rho.config import settings
 from rho.matching.coverage import fuzzy_coverage, keyword_coverage
 from rho.matching.embed import Embedder
 from rho.models.jd import RequirementSet
@@ -25,10 +26,12 @@ def _skill_evidence(
     term: str,
     resume: StructuredResume,
     emb: Embedder,
-    sem_hi: float = 0.65,
-    sem_lo: float = 0.45,
+    sem_hi: float | None = None,
+    sem_lo: float | None = None,
 ) -> tuple[str, list[str], float]:
     """returns (status, prov_ids, best_cosine)"""
+    sem_hi = settings.sem_hi if sem_hi is None else sem_hi
+    sem_lo = settings.sem_lo if sem_lo is None else sem_lo
     tl = term.lower()
     for i, skill in enumerate(resume.skills):
         sl = skill.lower()

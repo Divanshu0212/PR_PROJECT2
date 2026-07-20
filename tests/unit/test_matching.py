@@ -66,3 +66,23 @@ def test_semantic_similarity_zero_when_no_skills():
         requirements=[Requirement(text="Python", kind="skill", priority="must")]
     )
     assert match(resume, reqs).component_vector.semantic_similarity == 0.0
+
+
+def test_extract_jd_terms_pulls_keyphrases():
+    from rho.matching.coverage import extract_jd_terms
+
+    jd = (
+        "We are looking for a backend engineer with strong Python experience. "
+        "You will build REST APIs and deploy to Kubernetes clusters on AWS."
+    )
+    terms = extract_jd_terms(jd, top_n=10)
+    assert terms, "no terms extracted"
+    blob = " ".join(terms).lower()
+    assert "python" in blob
+    assert "kubernetes" in blob
+
+
+def test_extract_jd_terms_empty_text():
+    from rho.matching.coverage import extract_jd_terms
+
+    assert extract_jd_terms("") == []

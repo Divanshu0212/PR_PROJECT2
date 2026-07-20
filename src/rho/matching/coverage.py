@@ -1,4 +1,26 @@
+from functools import lru_cache
+
 from rapidfuzz import fuzz
+
+
+@lru_cache(maxsize=1)
+def _keybert():
+    from keybert import KeyBERT
+
+    from rho.matching.embed import _model
+
+    # reuse the cached mpnet instance rather than loading a second model
+    return KeyBERT(model=_model())
+
+
+def extract_jd_terms(jd_text: str, top_n: int = 15) -> list[str]:
+    """KeyBERT-extracted keyphrases from raw JD text, for use as `req_terms`."""
+    if not jd_text or not jd_text.strip():
+        return []
+    pairs = _keybert().extract_keywords(
+        jd_text, keyphrase_ngram_range=(1, 2), stop_words="english", top_n=top_n
+    )
+    return [phrase for phrase, _score in pairs]
 
 
 def keyword_coverage(req_terms: list[str], resume_skills: list[str]) -> float:

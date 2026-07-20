@@ -117,27 +117,32 @@ def main(
     y_overall = [t[0] for t in paired]
     y_keyword = [t[1] for t in paired]
 
-    # Primary: the engines' composite overallScore.
-    primary = _fit_and_score(X, y_overall, seed, out)
-    # Reported alongside: the JD-dependent dimension only.
-    keyword = _fit_and_score(X, y_keyword, seed, None)
+    # Primary (headline C2): the JD-dependent dimension. rho's features are
+    # résumé-vs-JD match signals, so the match dimension is the target they can
+    # actually predict — on overallScore they correlate negatively because the
+    # composite is ~80% résumé-intrinsic quality.
+    primary = _fit_and_score(X, y_keyword, seed, out)
+    # Secondary ablation: the composite overallScore. Reported to show *why*
+    # keywordMatch is the right target, not as a competing headline.
+    overall = _fit_and_score(X, y_overall, seed, None)
 
     metrics = {
         "n_pairs_requested": n_pairs,
         "n_usable": len(X),
+        "target": "keywordMatch",
         **primary,
-        "keyword_target": keyword,
+        "overall_target": overall,
     }
     print(json.dumps(metrics, indent=2))
     print(
-        f"\noverallScore target : calibrated MAE={primary['mae']:.2f} "
+        f"\nkeywordMatch target (PRIMARY): calibrated MAE={primary['mae']:.2f} "
         f"Spearman={primary['spearman']:.3f} | cosine MAE={primary['cosine_mae']:.2f} "
         f"Spearman={primary['cosine_spearman']:.3f}  (y mean {primary['y_mean']:.1f})"
     )
     print(
-        f"keywordMatch target : calibrated MAE={keyword['mae']:.2f} "
-        f"Spearman={keyword['spearman']:.3f} | cosine MAE={keyword['cosine_mae']:.2f} "
-        f"Spearman={keyword['cosine_spearman']:.3f}  (y mean {keyword['y_mean']:.1f})"
+        f"overallScore target (ablation): calibrated MAE={overall['mae']:.2f} "
+        f"Spearman={overall['spearman']:.3f} | cosine MAE={overall['cosine_mae']:.2f} "
+        f"Spearman={overall['cosine_spearman']:.3f}  (y mean {overall['y_mean']:.1f})"
     )
 
     # Fold the results into the progress file so a viewer shows them on finish.

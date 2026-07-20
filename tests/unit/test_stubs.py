@@ -12,5 +12,6 @@ def test_stubs_raise_not_implemented():
     #   rho.ingestion.ingest   (P1) -> test_ingestion.py
     #   rho.extraction.extract (P2) -> test_extraction_provenance.py
     #   rho.jd.analyze_jd      (P3) -> test_jd.py
+    #   rho.matching.match     (P3) -> test_matching.py
     with pytest.raises(NotImplementedError):
-        match(None, None)
+        harvest_ats(b"", "x.pdf", "")

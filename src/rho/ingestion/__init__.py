@@ -1,7 +1,10 @@
 from pathlib import Path
 
+from rho.ingestion.structural import structural_check
 from rho.ingestion.text_adapter import ingest_text
 from rho.models.provenance import ProvenanceMap
+
+__all__ = ["ingest", "structural_check"]
 
 
 def ingest(file_bytes: bytes, filename: str) -> tuple[str, ProvenanceMap]:

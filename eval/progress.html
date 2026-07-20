@@ -150,10 +150,23 @@
     <h2>Held-out metrics (C2)</h2>
     <div class="wrap">
       <table>
-        <thead><tr><th>Metric</th><th class="num">Calibrated</th><th class="num">Cosine baseline</th></tr></thead>
+        <thead><tr>
+          <th>Target</th><th class="num">MAE</th><th class="num">Spearman ρ</th>
+          <th class="num">Cosine MAE</th><th class="num">Cosine ρ</th><th class="num">y mean</th>
+        </tr></thead>
         <tbody>
-          <tr><td>MAE</td><td class="num" id="m-mae">—</td><td class="num" id="m-cmae">—</td></tr>
-          <tr><td>Spearman ρ</td><td class="num" id="m-rho">—</td><td class="num" id="m-crho">—</td></tr>
+          <tr>
+            <td>overallScore</td>
+            <td class="num" id="m-mae">—</td><td class="num" id="m-rho">—</td>
+            <td class="num" id="m-cmae">—</td><td class="num" id="m-crho">—</td>
+            <td class="num" id="m-ymean">—</td>
+          </tr>
+          <tr>
+            <td>keywordMatch</td>
+            <td class="num" id="k-mae">—</td><td class="num" id="k-rho">—</td>
+            <td class="num" id="k-cmae">—</td><td class="num" id="k-crho">—</td>
+            <td class="num" id="k-ymean">—</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -221,13 +234,20 @@
       if (data.metrics) {
         const m = data.metrics;
         document.getElementById("results").classList.add("visible");
-        document.getElementById("m-mae").textContent = m.mae.toFixed(2);
-        document.getElementById("m-cmae").textContent = m.cosine_mae.toFixed(2);
-        document.getElementById("m-rho").textContent = m.spearman.toFixed(3);
-        document.getElementById("m-crho").textContent = m.cosine_spearman.toFixed(3);
+        const row = (prefix, t) => {
+          if (!t) return;
+          document.getElementById(prefix + "-mae").textContent = t.mae.toFixed(2);
+          document.getElementById(prefix + "-rho").textContent = t.spearman.toFixed(3);
+          document.getElementById(prefix + "-cmae").textContent = t.cosine_mae.toFixed(2);
+          document.getElementById(prefix + "-crho").textContent = t.cosine_spearman.toFixed(3);
+          document.getElementById(prefix + "-ymean").textContent = t.y_mean.toFixed(1);
+        };
+        row("m", m);
+        row("k", m.keyword_target);
         document.getElementById("dataset-note").textContent =
           `${m.n_usable} usable pairs — ${m.n_train} train / ${m.n_heldout} held out. ` +
-          `Target mean ${m.y_mean.toFixed(1)}, sd ${m.y_std.toFixed(1)}.`;
+          `Compare targets on Spearman: the cosine baseline emits 0–100, so MAE against a ` +
+          `low-mean target reflects scale mismatch as much as ranking.`;
       }
     } else if (Date.now() - lastChange > 240000) {
       setStatus("stalled", "no progress in 4m");

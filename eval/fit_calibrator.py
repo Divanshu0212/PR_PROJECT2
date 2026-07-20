@@ -17,7 +17,7 @@ from sklearn.model_selection import train_test_split
 
 from eval.corpus import build_pairs
 from rho.ats import Calibrator, harvest_ats
-from rho.ats.aggregate import to_match_target
+from rho.ats.aggregate import to_match_target, to_target
 from rho.ats.dataset import build_calibration_dataset
 from rho.jd import analyze_jd
 from rho.jd.ollama import analyze_jd_schema as _ollama_schema_fn
@@ -63,6 +63,32 @@ def _progress_writer(path: str, started: float):
     return write
 
 
+def _fit_and_score(X, y, seed: int, out: str | None) -> dict:
+    """Fit a calibrator on one target definition and score it held-out."""
+    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.3, random_state=seed)
+    cal = Calibrator()
+    cal.fit(Xtr, ytr)
+
+    preds = np.array([cal.predict(x) for x in Xte])
+    yte_arr = np.array(yte)
+
+    # Ablation: raw cosine (semantic_similarity * 100) as the score.
+    cos = np.array([x.semantic_similarity * 100 for x in Xte])
+
+    if out:
+        cal.save(out)
+    return {
+        "n_train": len(Xtr),
+        "n_heldout": len(Xte),
+        "mae": float(np.mean(np.abs(preds - yte_arr))),
+        "spearman": float(spearmanr(preds, yte_arr).statistic),
+        "cosine_mae": float(np.mean(np.abs(cos - yte_arr))),
+        "cosine_spearman": float(spearmanr(cos, yte_arr).statistic),
+        "y_mean": float(np.mean(y)),
+        "y_std": float(np.std(y)),
+    }
+
+
 def main(
     n_pairs: int = 200,
     seed: int = 0,
@@ -70,47 +96,48 @@ def main(
     progress_path: str = PROGRESS_PATH,
 ) -> dict:
     pairs = build_pairs(n_pairs=n_pairs, seed=seed)
-    X, y = build_calibration_dataset(
+
+    # Harvest once, derive both targets from the same engine outputs so the two
+    # calibrations are directly comparable on identical features and pairs.
+    # `both_targets` rides along on the kept rows only, so it stays aligned with
+    # X even when a pair is dropped for failing featurisation.
+    def both_targets(engine_outputs: dict) -> tuple[float, float]:
+        return to_target(engine_outputs), to_match_target(engine_outputs)
+
+    X, paired = build_calibration_dataset(
         pairs,
         harvest_ats,
         feature_fn,
-        target_fn=to_match_target,
+        target_fn=both_targets,
         on_progress=_progress_writer(progress_path, time.time()),
     )
     if len(X) < 10:
         raise SystemExit(f"only {len(X)} usable pairs; need more data to fit")
 
-    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.3, random_state=seed)
-    cal = Calibrator()
-    cal.fit(Xtr, ytr)
+    y_overall = [t[0] for t in paired]
+    y_keyword = [t[1] for t in paired]
 
-    preds = np.array([cal.predict(x) for x in Xte])
-    yte_arr = np.array(yte)
-    mae = float(np.mean(np.abs(preds - yte_arr)))
-    rho = float(spearmanr(preds, yte_arr).statistic)
+    # Primary: the engines' composite overallScore.
+    primary = _fit_and_score(X, y_overall, seed, out)
+    # Reported alongside: the JD-dependent dimension only.
+    keyword = _fit_and_score(X, y_keyword, seed, None)
 
-    # Ablation: raw cosine (semantic_similarity * 100) as the score.
-    cos = np.array([x.semantic_similarity * 100 for x in Xte])
-    cos_mae = float(np.mean(np.abs(cos - yte_arr)))
-    cos_rho = float(spearmanr(cos, yte_arr).statistic)
-
-    cal.save(out)
     metrics = {
         "n_pairs_requested": n_pairs,
         "n_usable": len(X),
-        "n_train": len(Xtr),
-        "n_heldout": len(Xte),
-        "mae": mae,
-        "spearman": rho,
-        "cosine_mae": cos_mae,
-        "cosine_spearman": cos_rho,
-        "y_mean": float(np.mean(y)),
-        "y_std": float(np.std(y)),
+        **primary,
+        "keyword_target": keyword,
     }
     print(json.dumps(metrics, indent=2))
     print(
-        f"\ncalibrated MAE={mae:.2f} Spearman={rho:.3f} | "
-        f"cosine-baseline MAE={cos_mae:.2f} Spearman={cos_rho:.3f}"
+        f"\noverallScore target : calibrated MAE={primary['mae']:.2f} "
+        f"Spearman={primary['spearman']:.3f} | cosine MAE={primary['cosine_mae']:.2f} "
+        f"Spearman={primary['cosine_spearman']:.3f}  (y mean {primary['y_mean']:.1f})"
+    )
+    print(
+        f"keywordMatch target : calibrated MAE={keyword['mae']:.2f} "
+        f"Spearman={keyword['spearman']:.3f} | cosine MAE={keyword['cosine_mae']:.2f} "
+        f"Spearman={keyword['cosine_spearman']:.3f}  (y mean {keyword['y_mean']:.1f})"
     )
 
     # Fold the results into the progress file so a viewer shows them on finish.
@@ -131,5 +158,6 @@ if __name__ == "__main__":
     p.add_argument("--n-pairs", type=int, default=200)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="eval/calibrator.joblib")
+    p.add_argument("--progress-path", default=PROGRESS_PATH)
     a = p.parse_args()
-    main(n_pairs=a.n_pairs, seed=a.seed, out=a.out)
+    main(n_pairs=a.n_pairs, seed=a.seed, out=a.out, progress_path=a.progress_path)

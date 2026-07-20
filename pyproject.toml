@@ -9,6 +9,7 @@ dependencies = [
     "pydantic-settings>=2.2",
     "python-multipart>=0.0.9",
     "docling>=2.0",
+    "rapidfuzz>=3",
 ]
 
 [project.optional-dependencies]

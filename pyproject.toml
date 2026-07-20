@@ -10,6 +10,9 @@ dependencies = [
     "python-multipart>=0.0.9",
     "docling>=2.0",
     "rapidfuzz>=3",
+    "sentence-transformers>=3",
+    "keybert>=0.8",
+    "numpy",
 ]
 
 [project.optional-dependencies]

@@ -81,13 +81,26 @@ def keyword_coverage(req_terms: list[str], resume_skills: list[str]) -> float:
 def fuzzy_coverage(
     req_terms: list[str], resume_skills: list[str], threshold: int = 85
 ) -> float:
-    """Fraction of requirement terms matched allowing typos (RapidFuzz)."""
+    """Mean per-requirement content-word overlap, allowing typos (RapidFuzz).
+
+    Word-level like `keyword_coverage`: comparing a whole phrase against a
+    whole skill string never clears the threshold, so phrasal requirements
+    scored 0 regardless of how well the résumé matched.
+    """
     if not req_terms:
         return 1.0
-    low = [s.lower() for s in resume_skills]
-    hit = sum(
-        1
-        for t in req_terms
-        if any(fuzz.ratio(t.lower(), s) >= threshold or t.lower() in s for s in low)
-    )
-    return hit / len(req_terms)
+    resume_words = _content_words(" ".join(resume_skills))
+    scores = []
+    for term in req_terms:
+        words = _content_words(term)
+        if not words:
+            continue
+        hit = sum(
+            1
+            for w in words
+            if any(fuzz.ratio(w, rw) >= threshold for rw in resume_words)
+        )
+        scores.append(hit / len(words))
+    return (sum(scores) / len(scores)) if scores else 0.0
+
+

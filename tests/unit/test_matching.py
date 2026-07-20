@@ -29,6 +29,19 @@ def test_keyword_coverage_credits_partial_phrase_overlap():
     assert keyword_coverage(["kubernetes cluster orchestration"], skills) == 0.0
 
 
+def test_fuzzy_coverage_credits_partial_phrase_overlap():
+    """Same whole-string problem as keyword_coverage: fuzz.ratio on a full
+    phrase against a full skill never clears the threshold."""
+    skills = ["key account management", "market planning"]
+    assert fuzzy_coverage(["account project managment experience"], skills) > 0.5
+    assert fuzzy_coverage(["kubernetes cluster orchestration"], skills) == 0.0
+
+
+def test_fuzzy_coverage_still_catches_single_token_typos():
+    """Phase 3 behaviour for skill tokens is unchanged."""
+    assert fuzzy_coverage(["Python", "Kubernetes", "AWS"], ["python", "aws", "kubernets"]) == 1.0
+
+
 def test_keyword_coverage_still_exact_for_single_tokens():
     """Phase 3 behaviour for skill tokens is unchanged."""
     reqs = ["Python", "Kubernetes", "AWS"]

@@ -9,7 +9,8 @@ def test_stubs_raise_not_implemented():
     from rho.graph import run_pipeline
 
     # Implemented in earlier phases, covered by their own tests:
-    #   rho.ingestion.ingest  (P1) -> test_ingestion.py
+    #   rho.ingestion.ingest   (P1) -> test_ingestion.py
     #   rho.extraction.extract (P2) -> test_extraction_provenance.py
+    #   rho.jd.analyze_jd      (P3) -> test_jd.py
     with pytest.raises(NotImplementedError):
-        analyze_jd("")
+        match(None, None)

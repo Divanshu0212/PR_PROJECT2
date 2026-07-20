@@ -8,3 +8,5 @@ dist/
 
 # vendored ats-screener runner artifacts
 vendor/ats_screener/node_modules/
+
+eval/progress.json

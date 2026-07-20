@@ -365,10 +365,63 @@ git add -A && git commit -m "feat: apply calibrator to fill predicted_score"
 - [ ] `fit_calibrator.py` reports held-out MAE, Spearman, cosine-baseline ablation.
 - [ ] Scoreless docs excluded, not imputed.
 
-## Results (fill in — the C2 numbers the paper needs)
-- Engines used: ___ (+ versions / commit hashes)
-- Target definition: match-score aggregate / parse-injection recovery (circle one)
-- Dataset size: ___ résumé×JD pairs (train ___ / held-out ___)
-- **Calibrated MAE: ___  | Spearman ρ: ___  | Cosine-baseline MAE: ___**  ← headline C2 result
-- Calibrator family (Ridge/other): ___
-- Notes / deviations: ___
+## Results (the C2 numbers the paper needs)
+
+- **Engines used:** ats-screener (`github.com/sunnypatell/ats-screener` @ `4105f77a`), vendored under
+  `vendor/ats_screener/` and driven headless via Node `--experimental-strip-types`. Six ATS profiles
+  (Workday, Taleo, iCIMS, Greenhouse, Lever, SuccessFactors), rule-based, no LLM, no network.
+- **Target definition:** match-score aggregate, restricted to the **JD-dependent dimension**
+  (`keywordMatch`) via `to_match_target` — *not* the engines' composite `overallScore`. See deviation 2.
+- **Dataset size:** 200 résumé×JD pairs (140 train / 60 held-out); 200/200 usable, none skipped.
+- **Calibrated MAE: 2.79 | Spearman ρ: 0.440 | Cosine-baseline MAE: 26.13 (ρ 0.136)** ← headline C2 result
+- **Calibrator family:** Ridge (alpha=1.0), features in frozen order
+  `[keyword_coverage, semantic_similarity, fuzzy_coverage, must_have_coverage, nice_have_coverage]`.
+  Artifact: `eval/calibrator.joblib`.
+
+### How to read the headline number
+Target range is narrow and low (`y_mean` 13.3, `sd` 4.89) because `keywordMatch` is the only
+JD-dependent dimension and randomly-paired documents share few literal keywords. The cosine baseline
+emits 0–100, so a large part of its MAE=26.13 is **scale mismatch, not ranking failure**. The
+scale-free comparison is Spearman: **0.440 calibrated vs 0.136 cosine**. Quote the ρ pair as the
+result; quote MAE only alongside `y_mean`.
+
+### Deviations from the plan (all deliberate, each with a reason)
+
+1. **Resume-Matcher dropped as an engine.** Stood up and reachable (Docker, port 3007, Ollama
+   `gemma3:4b`), but its `ats_score` returned constant `0.0` on every pair — `refinement_stats`
+   showed `passes_completed: 0`, so `keyword_match_percentage` reached the scorer as 0. A résumé
+   written to match its JD still reported `jQuery` "missing" while listing jQuery. Unusable as a
+   calibration target. ats-screener alone satisfies "harvestable engine"; the plan's "≥2 engines"
+   is met in spirit by its six differentiated profiles, not by two codebases.
+2. **Target is `keywordMatch`, not `overallScore`.** ats-screener scores five dimensions but only
+   `keywordMatch` varies with the JD; `formatting`/`sections`/`experience`/`education` score the
+   résumé alone. On this corpus `keywordMatch` contributed ~2–11 of ~45 composite points, so the
+   composite target was mostly a résumé-quality score — rho's match features correlated with it
+   **negatively** (keyword −0.52, semantic −0.51, must −0.66). Switching to the JD-dependent
+   dimension flipped every correlation positive (+0.30 / +0.28 / +0.13 / +0.13 / +0.47).
+   `build_calibration_dataset` takes `target_fn`, so the composite target remains available and the
+   composite-vs-JD-dependent contrast is itself a reportable ablation.
+3. **JD analysis runs on Ollama, not vLLM.** `rho.jd.llm` requires CUDA; the calibration host has no
+   NVIDIA GPU. `rho.jd.ollama` uses Ollama's `format` parameter for server-side constrained decoding
+   against the same `JDSchema`, temperature pinned to 0. `analyze_jd` is unchanged — the backend is
+   injected via `_schema_fn`.
+4. **Parse-injection (Task 0b / OpenCATS) not built.** Match-score calibration is complete; the
+   parse-recovery dimension remains open.
+
+### Phase 3 bugs found and fixed while building this (all committed with tests)
+
+- `keyword_coverage` / `fuzzy_coverage` tested **whole-string containment**, which only ever fires
+  for single tokens. Every phrasal requirement ("account project management experience") is absent
+  verbatim from every résumé — even one saying "key account management" — so both features were
+  identically `0.0` across the entire corpus, i.e. 2 of 5 features dead. Now scored as content-word
+  overlap with stopwords excluded; single-token behaviour unchanged (Phase 3's `2/3` and `1.0`
+  assertions still hold).
+- Coverage searched `resume.skills` only, while `_skill_evidence` already searched the whole
+  résumé. `resume_text_terms` aligns them.
+
+### Environment / reproducibility
+- Ollama `gemma3:4b`, digest `a2af6cc3eb7fa8be8504abaf9b04e88f17a119ec3f04a3addf55f92841195f5a`,
+  `temperature=0`. CPU-only host (no GPU): ~75s per pair end-to-end, ~4.2h for the 200-pair run.
+- Ollama must bind beyond loopback for containers to reach it (`OLLAMA_HOST`), and a firewall rule
+  must admit the Docker bridge — otherwise engine LLM calls hang until timeout rather than failing.
+- Progress viewer: `eval/progress.html` + `eval/progress.json` (written atomically per pair).

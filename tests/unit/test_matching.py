@@ -1,7 +1,7 @@
 from rho.matching import match
 from rho.models.jd import RequirementSet, Requirement
-from rho.models.resume import StructuredResume
-from rho.matching.coverage import keyword_coverage, fuzzy_coverage
+from rho.models.resume import StructuredResume, WorkExperience
+from rho.matching.coverage import keyword_coverage, fuzzy_coverage, resume_text_terms
 from rho.matching.embed import Embedder
 
 
@@ -17,6 +17,40 @@ def test_keyword_and_fuzzy_coverage():
     skills = ["python", "aws", "kubernets"]  # last is a typo
     assert keyword_coverage(reqs, skills) == 2 / 3  # Python, AWS exact; Kubernetes no
     assert fuzzy_coverage(reqs, skills) == 1.0  # typo caught by fuzzy
+
+
+def test_coverage_searches_whole_resume_not_only_skills():
+    """Evidence for a requirement often lives in a bullet, not the skills list."""
+    resume = StructuredResume(
+        name="A",
+        skills=["Excel"],
+        work=[
+            WorkExperience(
+                company="Acme",
+                title="Engineer",
+                bullets=["Built Python services deployed on AWS"],
+            )
+        ],
+    )
+    assert keyword_coverage(["Python", "AWS"], resume_text_terms(resume)) == 1.0
+
+
+def test_coverage_matches_multiword_requirement_against_resume():
+    """LLM requirements are phrases; substring-matching them must still work."""
+    resume = StructuredResume(
+        name="A",
+        skills=["Bootstrap", "WordPress"],
+        work=[
+            WorkExperience(
+                company="Acme",
+                title="Developer",
+                bullets=["Translated designs responsively for multiple screen sizes"],
+            )
+        ],
+    )
+    terms = resume_text_terms(resume)
+    assert keyword_coverage(["responsively for multiple screen sizes"], terms) == 1.0
+    assert keyword_coverage(["kubernetes cluster administration"], terms) == 0.0
 
 
 def test_match_builds_vector_and_prov_gaps():

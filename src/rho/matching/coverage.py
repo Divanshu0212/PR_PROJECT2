@@ -23,6 +23,26 @@ def extract_jd_terms(jd_text: str, top_n: int = 15) -> list[str]:
     return [phrase for phrase, _score in pairs]
 
 
+def resume_text_terms(resume) -> list[str]:
+    """All résumé strings a requirement could be evidenced by.
+
+    Coverage originally searched `skills` alone, which assumes requirements are
+    short skill tokens. Real JD requirements are phrases ("translating designs
+    responsively"), and their evidence usually sits in an experience bullet, so
+    matching against skills alone pins both coverage signals at 0.
+    """
+    terms = list(resume.skills) + list(resume.certifications)
+    if resume.headline:
+        terms.append(resume.headline)
+    if resume.summary:
+        terms.append(resume.summary)
+    for w in resume.work:
+        terms.extend([w.title, w.company, *w.bullets])
+    for e in resume.education:
+        terms.extend(filter(None, [e.institution, e.degree, e.field]))
+    return [t for t in terms if t]
+
+
 def keyword_coverage(req_terms: list[str], resume_skills: list[str]) -> float:
     """Fraction of requirement terms literally present in the resume skills."""
     if not req_terms:

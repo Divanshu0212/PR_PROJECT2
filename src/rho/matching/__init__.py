@@ -1,7 +1,7 @@
 from rapidfuzz import fuzz
 
 from rho.config import settings
-from rho.matching.coverage import fuzzy_coverage, keyword_coverage
+from rho.matching.coverage import fuzzy_coverage, keyword_coverage, resume_text_terms
 from rho.matching.embed import Embedder
 from rho.models.jd import RequirementSet
 from rho.models.resume import StructuredResume
@@ -71,10 +71,13 @@ def match(resume: StructuredResume, reqs: RequirementSet) -> MatchResult:
     # mean best-match cosine across requirements — a true semantic signal, distinct
     # from the coverage fields. Clamped to [0,1]: cosines can go slightly negative.
     mean_cos = (sum(cosines) / len(cosines)) if cosines else 1.0
+    # Coverage searches the whole résumé, matching _skill_evidence above:
+    # requirement evidence lives in bullets and titles, not only the skills list.
+    haystack = resume_text_terms(resume)
     cv = ComponentVector(
-        keyword_coverage=keyword_coverage(req_terms, resume.skills),
+        keyword_coverage=keyword_coverage(req_terms, haystack),
         semantic_similarity=min(1.0, max(0.0, mean_cos)),
-        fuzzy_coverage=fuzzy_coverage(req_terms, resume.skills),
+        fuzzy_coverage=fuzzy_coverage(req_terms, haystack),
         must_have_coverage=(present_must / len(must)) if must else 1.0,
         nice_have_coverage=(present_nice / len(nice)) if nice else 1.0,
     )

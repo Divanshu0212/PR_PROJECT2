@@ -15,6 +15,21 @@ Three things about this model and endpoint shape the client:
    load across quotas, and a failing key falls through to the next rather than
    killing the call.
 
+**Quota reality (measured, free `on_demand` tier).** Two limits stack, and only
+the per-minute one is visible in `x-ratelimit-*` headers:
+
+- **TPM 8000** — reported in headers. `max_tokens` is reserved at *admission*,
+  not on use, so a 4096-token ceiling claims half the window per call.
+- **TPD 200000** — invisible in headers; it appears only in the 429 body
+  (`... on tokens per day (TPD): Limit 200000, Used 198323`). This is the binding
+  constraint for benchmark work: one 30-pair fabrication run costs ~136k tokens,
+  so the daily budget affords roughly **1.5 runs per day**.
+
+All five keys were observed draining in lockstep (~198.5k/200k each), so the
+daily pool is effectively shared: adding keys does not buy more headroom. Plan
+benchmark runs against TPD, not TPM, and treat a rate-limit failure late in a
+session as "quota spent" rather than something a retry can fix.
+
 Constrained decoding is therefore *prompt-plus-validation* rather than
 grammar-enforced, unlike the Ollama path. Pydantic validation at the call site
 is what rejects malformed output — no silent fills.
@@ -122,6 +137,10 @@ def estimate_tokens(text: str) -> int:
     return len(text) // 4
 
 
+class QuotaExhausted(Exception):
+    """Daily token pool (TPD) is spent. Retrying cannot help; stop the run."""
+
+
 class RateLimited(Exception):
     """429 from Groq, carrying the server's requested wait in seconds."""
 
@@ -135,12 +154,16 @@ def _httpx_transport(url: str, headers: dict, payload: dict, timeout: int) -> st
 
     response = httpx.post(url, headers=headers, json=payload, timeout=timeout)
     if response.status_code == 429:
+        body = response.text
+        if "(TPD)" in body or "tokens per day" in body:
+            # Not transient: the daily pool is gone and no retry recovers it.
+            raise QuotaExhausted(f"Groq daily token quota exhausted: {body[:220]}")
         # The free tier limits *tokens* per minute (8k), not just requests, and
         # the reset header is far more accurate than guessing at a backoff.
         raw = response.headers.get("retry-after") or response.headers.get(
             "x-ratelimit-reset-tokens", "5"
         )
-        raise RateLimited(_parse_duration(raw), f"429: {response.text[:120]}")
+        raise RateLimited(_parse_duration(raw), f"429: {body[:120]}")
     response.raise_for_status()
     return response.text
 
@@ -233,6 +256,10 @@ class GroqClient:
                 body = json.loads(raw)
                 content = body["choices"][0]["message"]["content"]
                 return json.loads(strip_reasoning(content))
+            except QuotaExhausted:
+                # Keys share the daily pool, so rotating and waiting are both
+                # futile. Fail fast and loudly rather than after 15 attempts.
+                raise
             except Exception as exc:  # try the next key before failing the call
                 errors.append(f"{type(exc).__name__}: {exc}")
                 if attempt + 1 >= attempts:

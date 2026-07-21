@@ -256,3 +256,61 @@ def test_budget_charges_reserved_max_tokens_not_expected_output():
     client.complete_json("x" * 4000)  # ~1000 prompt tokens
     charged = sum(n for _, n in budget._spent)
     assert charged >= 1500, f"reserved max_tokens not charged (got {charged})"
+
+
+def test_daily_quota_exhaustion_fails_fast_without_retrying():
+    """TPD is shared across keys: rotating and sleeping cannot recover it."""
+    from rho.llm.groq import QuotaExhausted
+
+    calls, slept = [], []
+
+    def exhausted(url, headers, payload, timeout):
+        calls.append(1)
+        raise QuotaExhausted("tokens per day (TPD): Limit 200000, Used 199999")
+
+    client = GroqClient(api_keys=["k1", "k2", "k3"], transport=exhausted)
+    import rho.llm.groq as mod
+
+    original = mod.time.sleep
+    mod.time.sleep = slept.append
+    try:
+        with pytest.raises(QuotaExhausted):
+            client.complete_json("p")
+    finally:
+        mod.time.sleep = original
+    assert len(calls) == 1  # gave up immediately
+    assert slept == []
+
+
+def test_transport_classifies_daily_quota_separately_from_tpm():
+    from rho.llm.groq import QuotaExhausted, RateLimited, _httpx_transport
+
+    class FakeResponse:
+        def __init__(self, text):
+            self.status_code, self.text, self.headers = 429, text, {}
+
+    import rho.llm.groq as mod
+
+    original = mod.httpx if hasattr(mod, "httpx") else None
+    del original  # transport imports httpx lazily; patch at module scope instead
+
+    import types
+
+    fake = types.SimpleNamespace(
+        post=lambda *a, **k: FakeResponse(
+            '{"error":{"message":"... on tokens per day (TPD): Limit 200000, Used 198323"}}'
+        )
+    )
+    import sys
+
+    saved = sys.modules.get("httpx")
+    sys.modules["httpx"] = fake
+    try:
+        with pytest.raises(QuotaExhausted):
+            _httpx_transport("u", {}, {}, 10)
+        fake.post = lambda *a, **k: FakeResponse('{"error":{"message":"TPM exceeded"}}')
+        with pytest.raises(RateLimited):
+            _httpx_transport("u", {}, {}, 10)
+    finally:
+        if saved is not None:
+            sys.modules["httpx"] = saved

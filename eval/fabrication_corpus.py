@@ -77,9 +77,13 @@ def build_corpus_pairs(
 
     def _analyze(indexed):
         """Network-bound half: safe to run concurrently."""
+        from rho.llm.groq import QuotaExhausted
+
         i, (_, jd_text) = indexed
         try:
             return i, analyze_jd_schema_groq(jd_text)
+        except QuotaExhausted:
+            raise  # no point analysing the rest; the day's budget is gone
         except Exception as exc:
             # Never drop silently: a swallowed 429 would shrink the benchmark
             # without saying so, which reads as a clean run on fewer pairs.

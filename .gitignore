@@ -5,7 +5,7 @@ __pycache__/
 .pytest_cache/
 build/
 dist/
-
+.env
 # vendored ats-screener runner artifacts
 vendor/ats_screener/node_modules/
 

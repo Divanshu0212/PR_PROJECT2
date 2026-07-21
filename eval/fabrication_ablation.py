@@ -21,8 +21,10 @@ import time
 from pathlib import Path
 
 from rho.ingestion import ingest
+from rho.models.jd import Requirement
 from rho.models.provenance import ProvenanceMap
 from rho.models.resume import StructuredResume
+from rho.models.scoring import Gap
 from rho.rewrite.llm import rewrite_schema
 from rho.rewrite.verifier import verify_against_source
 
@@ -46,12 +48,23 @@ def load_pairs(path: Path = PAIRS_PATH) -> list[dict]:
             headline=lines[1] if len(lines) > 1 else None,
             skills=list(item["source_skills"]),
         )
+        # The absent requirements ARE the adversarial pressure: naming them as
+        # targets is what tempts the model to invent. Passing gaps=[] would test
+        # the rewriter in an easy condition the benchmark was built to avoid.
+        gaps = [
+            Gap(
+                requirement=Requirement(text=t, kind="skill", priority="must"),
+                status="absent",
+            )
+            for t in item["tempting_absent"]
+        ]
         pairs.append(
             {
                 "id": item["id"],
                 "resume": resume,
                 "prov": prov,
                 "jd": item["jd"],
+                "gaps": gaps,
                 "tempting_absent": item["tempting_absent"],
             }
         )
@@ -73,7 +86,7 @@ def run(pairs: list[dict], verbose: bool = True) -> dict:
         source, prov = pair["resume"], pair["prov"]
         started = time.monotonic()
         try:
-            raw = rewrite_schema(source, gaps=[])  # gate OFF: ship as generated
+            raw = rewrite_schema(source, pair["gaps"])  # gate OFF: ship as generated
         except Exception as exc:  # a dead model must not look like a clean run
             print(f"  [{i}/{len(pairs)}] {pair['id']}: FAILED ({exc})")
             per_pair.append({"id": pair["id"], "error": str(exc)})

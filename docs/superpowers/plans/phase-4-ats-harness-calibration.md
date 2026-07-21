@@ -372,11 +372,17 @@ git add -A && git commit -m "feat: apply calibrator to fill predicted_score"
   (Workday, Taleo, iCIMS, Greenhouse, Lever, SuccessFactors), rule-based, no LLM, no network.
 - **Target definition:** match-score aggregate, restricted to the **JD-dependent dimension**
   (`keywordMatch`) via `to_match_target` — *not* the engines' composite `overallScore`. See deviation 2.
-- **Dataset size:** 200 résumé×JD pairs (140 train / 60 held-out); 200/200 usable, none skipped.
-- **Calibrated MAE: 2.79 | Spearman ρ: 0.440 | Cosine-baseline MAE: 26.13 (ρ 0.136)** ← headline C2 result
+- **Dataset size:** 200 requested; 199 usable (1 dropped for missing engine breakdown), 139 train / 60 held-out.
+- **Calibrated MAE: 3.17 | Spearman ρ: 0.328 | Cosine-baseline MAE: 26.00 (ρ 0.168)** ← headline C2 result (keywordMatch target)
+- **overallScore ablation (same 199 pairs):** calibrated MAE 4.22, ρ 0.287 | cosine MAE 11.26, ρ **0.016**.
+  Against the composite, the cosine baseline is essentially random (ρ≈0); the calibrator still beats it.
+  This is *why* keywordMatch is the primary target — see deviation 2.
 - **Calibrator family:** Ridge (alpha=1.0), features in frozen order
   `[keyword_coverage, semantic_similarity, fuzzy_coverage, must_have_coverage, nice_have_coverage]`.
-  Artifact: `eval/calibrator.joblib`.
+  Artifact: `eval/calibrator.joblib` (fitted on the keywordMatch target).
+- **Reproducibility note:** two runs gave primary ρ 0.440 and 0.328 (same pipeline, different
+  train/held-out split of 60 points). Reporting the more conservative 0.328 as the saved artifact;
+  both beat the cosine baseline.
 
 ### How to read the headline number
 Target range is narrow and low (`y_mean` 13.3, `sd` 4.89) because `keywordMatch` is the only

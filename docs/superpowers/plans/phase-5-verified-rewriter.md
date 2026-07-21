@@ -44,7 +44,7 @@
 **Interfaces:**
 - Produces: `hard_content_tokens(resume: StructuredResume) -> list[HardToken]` where `HardToken = (value: str, field_path: str)` — every skill, company, title, cert, date, and bullet-embedded tool/number that constitutes a factual claim. Start with structured fields (skills, companies, titles, certs, dates); bullets handled as whole-string claims in Task 2.
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 ```python
 # tests/unit/test_verifier.py
 from rho.models.resume import StructuredResume, WorkExperience
@@ -59,10 +59,10 @@ def test_hard_tokens_cover_skills_and_work():
     assert {"Python","AWS","AWS SAA","Acme","Engineer"} <= values
 ```
 
-- [ ] **Step 2: Run to verify fail**
+- [x] **Step 2: Run to verify fail**
 Run: `pytest tests/unit/test_verifier.py::test_hard_tokens_cover_skills_and_work -v` → FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 ```python
 # src/rho/rewrite/tokens.py
 from rho.models.resume import StructuredResume
@@ -83,10 +83,10 @@ def hard_content_tokens(resume: StructuredResume) -> list[HardToken]:
     return [(v, p) for (v, p) in toks if v and v.strip()]
 ```
 
-- [ ] **Step 4: Run to verify pass** → PASS.
+- [x] **Step 4: Run to verify pass** → PASS.
 Run: `pytest tests/unit/test_verifier.py::test_hard_tokens_cover_skills_and_work -v`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add -A && git commit -m "feat: hard-content token extraction for verification"
 ```
@@ -103,7 +103,7 @@ git add -A && git commit -m "feat: hard-content token extraction for verificatio
 - Produces: `verify(tailored: StructuredResume, source: StructuredResume, prov: ProvenanceMap) -> tuple[StructuredResume, FabricationReport]`. Logic: for each hard token in `tailored` NOT already present in `source` (a new addition), check `find_prov(value, prov)`; if empty → **reject**: revert that field to source (or drop the added item), append `RejectedEdit`. `total_edits` = number of additions checked; `verified_edits` = additions that had provenance; `fabrication_rate` = rejected/total (0 if no additions).
 - Re-export `verify` from `rho.rewrite` matching the frozen signature `verify(tailored, prov)`; provide source via closure in `rewrite()`.
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 ```python
 # add to tests/unit/test_verifier.py
 from rho.models.provenance import SourceSpan, ProvenanceMap
@@ -131,10 +131,10 @@ def test_verify_keeps_supported_addition():
     assert report.fabrication_rate == 0.0
 ```
 
-- [ ] **Step 2: Run to verify fail** → FAIL.
+- [x] **Step 2: Run to verify fail** → FAIL.
 Run: `pytest tests/unit/test_verifier.py -k verify -v`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 ```python
 # src/rho/rewrite/verifier.py
 from rho.models.resume import StructuredResume
@@ -172,10 +172,10 @@ def verify(tailored, prov):        # frozen signature; source captured by rewrit
     raise RuntimeError("call verify_against_source with the source resume; wired in rewrite()")
 ```
 
-- [ ] **Step 4: Run to verify pass** → PASS both.
+- [x] **Step 4: Run to verify pass** → PASS both.
 Run: `pytest tests/unit/test_verifier.py -k verify -v`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add -A && git commit -m "feat: provenance verification gate + fabrication report (C3)"
 ```
@@ -191,7 +191,7 @@ git add -A && git commit -m "feat: provenance verification gate + fabrication re
 **Interfaces:**
 - Produces: `rewrite_schema(source: StructuredResume, gaps) -> StructuredResume`. Constrained to the same resume schema. Prompt: master résumé is the ONLY source of truth; reorder/rephrase/select/emphasize toward the gaps; never invent skills/tools/metrics/dates; if a gap can't be satisfied truthfully, leave it. Temperature 0.6.
 
-- [ ] **Step 1: Skipping integration test**
+- [x] **Step 1: Skipping integration test**
 ```python
 # tests/integration/test_rewrite_llm.py
 import os, pytest
@@ -205,12 +205,12 @@ def test_rewrite_does_not_add_unsourced_skill():
     assert "python" in [s.lower() for s in out.skills]
 ```
 
-- [ ] **Step 2: Run to verify skip.**
+- [x] **Step 2: Run to verify skip.**
 Run: `pytest tests/integration/test_rewrite_llm.py -v` → SKIP.
 
-- [ ] **Step 3: Implement** (mirror `extraction/llm.py`; constrained to a resume schema; grounding prompt; temperature 0.6). Note version deviations in Results.
+- [x] **Step 3: Implement** (mirror `extraction/llm.py`; constrained to a resume schema; grounding prompt; temperature 0.6). Note version deviations in Results.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 ```bash
 git add -A && git commit -m "feat: grounded rewrite generation"
 ```
@@ -226,7 +226,7 @@ git add -A && git commit -m "feat: grounded rewrite generation"
 **Interfaces:**
 - Produces: `rewrite(resume, gaps, prov, _rewrite_fn=None) -> TailoredResume`. Runs `_rewrite_fn(resume, gaps)` (LLM or fake) → `verify_against_source(tailored, resume, prov)` → assembles `TailoredResume(resume=fixed, fabrication_report=report)`. **Note:** the frozen shared-context signature is `rewrite(resume, gaps)`; extend it to accept `prov` (update shared-context Section 6 + P6 caller to pass `prov`). Record this signature change in shared context.
 
-- [ ] **Step 1: Write failing test (fake rewriter injects a fabrication)**
+- [x] **Step 1: Write failing test (fake rewriter injects a fabrication)**
 ```python
 # add to tests/unit/test_verifier.py
 from rho.rewrite import rewrite
@@ -238,10 +238,10 @@ def test_rewrite_gate_strips_fabrication():
     assert tr.fabrication_report.fabrication_rate == 1.0
 ```
 
-- [ ] **Step 2: Run to verify fail** → FAIL.
+- [x] **Step 2: Run to verify fail** → FAIL.
 Run: `pytest tests/unit/test_verifier.py::test_rewrite_gate_strips_fabrication -v`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 ```python
 # src/rho/rewrite/__init__.py  (replace stub)
 from rho.models.rewrite import TailoredResume
@@ -255,9 +255,9 @@ def rewrite(resume, gaps, prov, _rewrite_fn=None) -> TailoredResume:
 ```
 Update `00-SHARED-CONTEXT.md` Section 6 signature to `rewrite(resume, gaps, prov)`.
 
-- [ ] **Step 4: Run to verify pass** → PASS.
+- [x] **Step 4: Run to verify pass** → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add -A && git commit -m "feat: rewrite() orchestration with verification gate"
 ```
@@ -273,9 +273,9 @@ git add -A && git commit -m "feat: rewrite() orchestration with verification gat
 **Interfaces:**
 - Produces: `eval/fabrication_ablation.py` running the real rewriter twice — gate ON (`verify_against_source` applied) vs gate OFF (raw rewrite) — reporting fabrication rate and count of unsourced additions in each. This is the headline C3 number.
 
-- [ ] **Step 1: Build 10–30 adversarial pairs.** Each: a résumé + a JD demanding skills the résumé lacks (tempting the model to invent). Record ground-truth source skills.
+- [x] **Step 1: Build 10–30 adversarial pairs.** Each: a résumé + a JD demanding skills the résumé lacks (tempting the model to invent). Record ground-truth source skills.
 
-- [ ] **Step 2: Write ablation script**
+- [x] **Step 2: Write ablation script**
 ```python
 # eval/fabrication_ablation.py
 """Gate ON vs OFF fabrication comparison (C3 headline)."""
@@ -296,7 +296,7 @@ def run(pairs):   # pairs: list[(source_resume, gaps, prov)]
 ```
 (gate-ON shipped unsourced should be 0 by construction — that IS the claim.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 ```bash
 git add -A && git commit -m "feat: fabrication benchmark + gate ablation (C3)"
 ```
@@ -304,15 +304,83 @@ git add -A && git commit -m "feat: fabrication benchmark + gate ablation (C3)"
 ---
 
 ## Self-Review
-- [ ] Gate rejects every unsourced hard-content addition (skills + certs + bullet tools).
-- [ ] `fabrication_rate` computed correctly; gate-ON ships zero unsourced additions.
-- [ ] `rewrite()` returns `TailoredResume` with intact provenance + report.
-- [ ] Shared-context Section 6 updated for `rewrite(resume, gaps, prov)`.
-- [ ] `pytest tests/unit/test_verifier.py -v` green.
+- [x] Gate rejects every unsourced hard-content addition (skills + certs + bullet tools).
+- [x] `fabrication_rate` computed correctly; gate-ON ships zero unsourced additions.
+- [x] `rewrite()` returns `TailoredResume` with intact provenance + report.
+- [x] Shared-context Section 6 updated for `rewrite(resume, gaps, prov)`.
+- [x] `pytest tests/unit/test_verifier.py -v` green.
 
-## Results (fill in — C3 numbers)
-- Fabrication benchmark size: ___ pairs
-- **Unsourced additions shipped: gate-OFF ___ vs gate-ON ___ (must be 0)**  ← headline C3
-- Mean fabrication_rate (gate detects): ___
-- Rewrite quality note (did truthful tailoring still improve match?): ___
-- LLM/Outlines deviations: ___
+## Results (the C3 numbers the paper needs)
+
+- **Fabrication benchmark size:** 12 adversarial pairs (`tests/fixtures/fabrication/pairs.json`).
+  Each is a résumé whose JD demands skills the résumé does not have — 61 absent requirements in
+  total. Provenance is built by running the real `ingest()` path over the résumé text, so the gate
+  sees production-shaped spans, not a hand-written map.
+- **Unsourced additions shipped: gate-OFF 15 vs gate-ON 0** ← headline C3 (no-gaps condition)
+  Adversarial condition (gap list in the prompt): **gate-OFF 3 vs gate-ON 0**.
+  Gate-ON is 0 in both conditions **by construction** — that is the claim. The guarantee is
+  structural, not a model behaviour that happened to hold on this sample.
+- **Mean fabrication_rate (gate detects):** 0.562 without gaps in the prompt, 0.083 with them.
+- **Rewriter:** `gemma3:4b` via Ollama, temperature 0.6, JSON-schema-constrained decoding.
+  Artifacts: `eval/fabrication_results.json` (gaps), `eval/fabrication_results_nogaps.json`.
+
+### What the gate actually caught
+Rejections are not near-miss paraphrases — they are whole invented facts. Across the no-gaps run
+the model fabricated employers the résumé never mentions (`GlobalTech Solutions`, `Acme Corp`,
+`Tech Solutions Inc.`, `Apex Electronics`) and titles it was never given (`Software Engineer II`,
+`Junior Data Analyst`). The single failing adversarial pair (`fullstack-node`) invented an employer,
+a title, **and** a university (`University of California, Berkeley`) in one generation. Every one
+was rejected and reverted; none reached the output.
+
+### The counterintuitive finding (worth reporting)
+Naming the missing requirements in the prompt *reduced* fabrication (15 → 3 unsourced additions).
+The mechanism is visible in the edit counts, not just the rates: with the gap list the model
+attempted **3 additions total** versus **24** without it. Stating the targets alongside "never
+invent" appears to make the instruction concrete enough to follow, so the model declines to fill
+the gaps at all rather than inventing content to cover them. The mean fabrication_rate drop
+(0.562 → 0.083) is therefore mostly a drop in *attempts*, not an improvement in per-attempt
+honesty — the rate's denominator shrinks with it, which is why both the rate and the raw count
+are reported.
+
+**This is exactly why the gate is the contribution and the prompt is not.** Prompt grounding moved
+fabrication from 15 to 3; it never reached 0, and its effect was an accident of phrasing rather
+than a guarantee. The gate reached 0 in both conditions because it cannot do otherwise.
+
+### Deviations from the plan (each deliberate, with a reason)
+
+1. **Ollama instead of vLLM + Outlines** — same deviation Phase 4 took, same cause: the host has no
+   CUDA (`torch.cuda.is_available()` is `False`), so `outlines.models.vllm` cannot load. Ollama's
+   `format` parameter enforces the JSON schema during decoding, so this is still constrained
+   generation, and the C3 ablation actually runs on this machine.
+2. **The gate needs more than `find_prov`.** The plan's sketch accepts any addition for which
+   `find_prov` returns a hit. That is too permissive to be a gate: `find_prov` scores with
+   RapidFuzz `partial_ratio`, which matches the best *substring*, so a span reading `"Engineer"`
+   scores 100 against the fabricated promotion `"Staff Engineer"`, and `"Python"` licenses
+   `"Senior Python Developer"`. The verifier therefore additionally requires that **every content
+   word** of an added value appear in the supporting span (`_WORD_MATCH`, stopwords exempt).
+   Pinned by `test_verify_rejects_seniority_inflation`.
+3. **Bullets are checked against source bullets, not `find_prov`.** Same `partial_ratio` failure
+   mode, worse: a fabricated bullet passes if any short span appears inside it — "Led a team of 40
+   engineers" scores 100 against a span reading "Engineer". Whole bullets are compared with
+   `token_set_ratio` against the source bullets instead, so rephrasing survives and new claims do
+   not. Pinned by `test_verify_rejects_unsupported_bullet`.
+4. **Gate-ON is measured, not assumed.** The plan's ablation computes gate-ON as
+   `(total_edits - verified_edits) - len(rejected_edits)`, which is identically 0 by arithmetic —
+   it would report success even if the gate leaked. `unsourced_count` re-verifies the *gated
+   résumé* instead, so a leak would show up as a non-zero number. Pinned by
+   `test_unsourced_count_is_zero_after_gating`.
+5. **`verify()` raises `RuntimeError`.** The frozen Section-6 signature `verify(tailored, prov)`
+   cannot distinguish an addition from a reorder, because that needs the source résumé. Rather
+   than silently score every value as new (and report a meaningless fabrication rate), it fails
+   loudly and directs callers to `verify_against_source`. `rewrite()` wires it correctly.
+6. **`rewrite()` takes `prov`** — recorded in shared-context Section 6. P6 must pass it.
+
+### Limitations
+- 12 pairs is small, and they are synthetic résumés written for this benchmark rather than sampled
+  from the corpus. The gate-ON=0 result does not depend on sample size (it is structural), but the
+  gate-OFF rate does — treat 15/24 as an illustration of fabrication pressure, not a population
+  estimate.
+- One rewriter model at one temperature. The gate-OFF number is a property of `gemma3:4b`, not of
+  grounded prompting in general.
+- The gate verifies *provenance*, not *semantics*: a value copied from an unrelated part of the
+  source document passes. It stops invention, not misattribution.

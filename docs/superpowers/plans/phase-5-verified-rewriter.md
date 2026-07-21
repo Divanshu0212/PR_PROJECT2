@@ -348,6 +348,23 @@ than a guarantee. The gate reached 0 in both conditions because it cannot do oth
 
 ### Deviations from the plan (each deliberate, with a reason)
 
+0. **Groq `qwen/qwen3.6-27b` is the current rewriter; Ollama `gemma3:4b` is the earlier one.**
+   The numbers above under "gemma3:4b" are retained for comparison — see the Groq section below for
+   the current headline. Three things the Groq path forced, each verified rather than assumed:
+   - **Cloudflare rejects `urllib`.** Requests via `urllib.request` return `403 / error code: 1010`
+     *before* Groq evaluates the key — a bogus key and a valid key fail identically, which is how
+     the cause was isolated. `httpx` and `curl` pass, so `httpx` moved from a dev extra to a runtime
+     dependency and `rho.llm.groq` uses it instead of the stdlib used elsewhere in this repo.
+   - **Qwen3.6 is a reasoning model and does NOT support `json_schema`.** It emits `<think>…</think>`
+     inline, which breaks `json_object` validation too. `reasoning_format=hidden` suppresses it
+     server-side. Consequence for the paper: on this backend the schema is enforced by Pydantic
+     *after* generation, not by constrained decoding — weaker than the Ollama path, and the reason
+     `_coerce`/`_parse` drop malformed items rather than defaulting them.
+   - **The free tier caps tokens per minute (8k), account-wide.** Key rotation does not help: all
+     five keys draw on one budget. An initial retry-on-429 design was actively harmful — a 2h45m run
+     accumulated `00:00:00` CPU time, entirely asleep. `TokenBudget` now paces requests *before*
+     sending, and 429s honour the server's own reset header instead of a guessed backoff.
+
 1. **Ollama instead of vLLM + Outlines** — same deviation Phase 4 took, same cause: the host has no
    CUDA (`torch.cuda.is_available()` is `False`), so `outlines.models.vllm` cannot load. Ollama's
    `format` parameter enforces the JSON schema during decoding, so this is still constrained
@@ -364,6 +381,27 @@ than a guarantee. The gate reached 0 in both conditions because it cannot do oth
    engineers" scores 100 against a span reading "Engineer". Whole bullets are compared with
    `token_set_ratio` against the source bullets instead, so rephrasing survives and new claims do
    not. Pinned by `test_verify_rejects_unsupported_bullet`.
+
+3b. **The bullet threshold was wrong and produced false positives (found on corpus data).**
+   `_BULLET_SIMILARITY = 90` rejected *every genuine rephrasing* as a fabrication. Measured on real
+   corpus rewrites: honest rephrasings of a source bullet score **68–87**, inventions score
+   **37–42** — 90 sat above the entire legitimate class. Example wrongly rejected:
+   `"Optimized and tuned Teradata and Oracle views and SQL queries…"` against source
+   `"Worked on optimizing and tuning the Teradata and Oracle views and SQL's…"` — the same claim,
+   reworded, which is precisely what the rewriter is licensed to do.
+
+   Two purely lexical repairs were tried and both failed: requiring every content word to be sourced
+   flags ordinary synonym choice (`improve` → `enhance`), and stem matching still cannot bridge
+   irregular pairs (`SQL's` → `queries`). The rule was then re-derived from what C3 actually claims.
+   **A bullet now ships when it tracks a source bullet (≥60) *and* introduces no unsourced
+   hard-content token** — tool, org, acronym, number, or date. Prose wording is free; new facts are
+   not. `"Led a team of 40 Teradata engineers"` still fails, on the unsourced `40`. Pinned by
+   `test_gate_accepts_genuine_rephrasing_of_a_source_bullet` and
+   `test_gate_still_rejects_invention_reusing_source_vocabulary`.
+
+   **This inflated the earlier gemma3 gate-OFF counts.** Any bullet-derived rejection in the numbers
+   above may be a rephrasing rather than a fabrication; the employer/title/university rejections
+   (structured fields, not bullets) are unaffected and remain real.
 4. **Gate-ON is measured, not assumed.** The plan's ablation computes gate-ON as
    `(total_edits - verified_edits) - len(rejected_edits)`, which is identically 0 by arithmetic —
    it would report success even if the gate leaked. `unsourced_count` re-verifies the *gated
@@ -380,6 +418,12 @@ than a guarantee. The gate reached 0 in both conditions because it cannot do oth
   from the corpus. The gate-ON=0 result does not depend on sample size (it is structural), but the
   gate-OFF rate does — treat 15/24 as an illustration of fabrication pressure, not a population
   estimate.
+- **The curated 12-pair fixture no longer discriminates on a strong model.** Those résumés carry
+  skills only — no work history, no bullets — so the gate's work/bullet/education paths were never
+  exercised by real generated text. On `qwen/qwen3.6-27b` the fixture yields **0 edits attempted and
+  0 fabrications**, i.e. it measures nothing. Corpus-backed pairs
+  (`eval/fabrication_corpus.py`, résumés with populated work history and JD-derived gaps) are the
+  benchmark that still has signal, and are what the Groq numbers below are drawn from.
 - One rewriter model at one temperature. The gate-OFF number is a property of `gemma3:4b`, not of
   grounded prompting in general.
 - The gate verifies *provenance*, not *semantics*: a value copied from an unrelated part of the

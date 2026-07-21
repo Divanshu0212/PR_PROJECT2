@@ -1,7 +1,23 @@
 """Phase 5 (C3): hard-content tokens + the provenance verification gate."""
 
+from rho.models.provenance import ProvenanceMap, SourceSpan
 from rho.models.resume import Education, StructuredResume, WorkExperience
 from rho.rewrite.tokens import hard_content_tokens
+from rho.rewrite.verifier import verify_against_source
+
+
+def _prov(*texts: str) -> ProvenanceMap:
+    """A ProvenanceMap whose spans support exactly `texts` (default: "Python")."""
+    pm = ProvenanceMap(doc_id="d")
+    cursor = 0
+    for t in texts or ("Python",):
+        pm.add(
+            SourceSpan(
+                doc_id="d", char_start=cursor, char_end=cursor + len(t), raw_text=t
+            )
+        )
+        cursor += len(t) + 1
+    return pm
 
 
 def test_hard_tokens_cover_skills_and_work():
@@ -50,3 +66,156 @@ def test_hard_tokens_field_paths_are_addressable():
     assert paths["Python"] == "skills[0]"
     assert paths["Acme"] == "work[0].company"
     assert paths["Engineer"] == "work[0].title"
+
+
+# --- the gate: skills ---------------------------------------------------
+
+
+def test_verify_rejects_unsupported_addition():
+    source = StructuredResume(name="A", skills=["Python"])
+    tailored = StructuredResume(name="A", skills=["Python", "Kubernetes"])
+    fixed, report = verify_against_source(tailored, source, _prov())
+    assert "Kubernetes" not in fixed.skills  # reverted
+    assert report.total_edits == 1
+    assert report.verified_edits == 0
+    assert report.fabrication_rate == 1.0
+    assert report.rejected_edits[0].added_text == "Kubernetes"
+
+
+def test_verify_keeps_supported_addition():
+    source = StructuredResume(name="A", skills=["Python"])
+    tailored = StructuredResume(name="A", skills=["Python", "FastAPI"])
+    fixed, report = verify_against_source(tailored, source, _prov("Python", "FastAPI"))
+    assert "FastAPI" in fixed.skills
+    assert report.verified_edits == 1
+    assert report.fabrication_rate == 0.0
+
+
+def test_verify_counts_no_edits_when_unchanged():
+    """Reordering/reselecting existing values is not an edit to verify."""
+    source = StructuredResume(name="A", skills=["Python", "SQL"])
+    tailored = StructuredResume(name="A", skills=["SQL", "Python"])
+    fixed, report = verify_against_source(tailored, source, _prov())
+    assert fixed.skills == ["SQL", "Python"]
+    assert report.total_edits == 0
+    assert report.fabrication_rate == 0.0
+
+
+# --- the gate: certifications ------------------------------------------
+
+
+def test_verify_rejects_unsupported_certification():
+    source = StructuredResume(name="A", certifications=["AWS SAA"])
+    tailored = StructuredResume(name="A", certifications=["AWS SAA", "CISSP"])
+    fixed, report = verify_against_source(tailored, source, _prov("AWS SAA"))
+    assert fixed.certifications == ["AWS SAA"]
+    assert report.rejected_edits[0].added_text == "CISSP"
+    assert report.fabrication_rate == 1.0
+
+
+def test_verify_keeps_supported_certification():
+    source = StructuredResume(name="A", certifications=[])
+    tailored = StructuredResume(name="A", certifications=["AWS SAA"])
+    fixed, report = verify_against_source(tailored, source, _prov("AWS SAA"))
+    assert fixed.certifications == ["AWS SAA"]
+    assert report.verified_edits == 1
+
+
+# --- the gate: work bullets --------------------------------------------
+
+
+def test_verify_rejects_unsupported_bullet():
+    source = StructuredResume(
+        name="A",
+        work=[WorkExperience(company="Acme", title="Engineer", bullets=["Built APIs"])],
+    )
+    tailored = StructuredResume(
+        name="A",
+        work=[
+            WorkExperience(
+                company="Acme",
+                title="Engineer",
+                bullets=["Built APIs", "Led a team of 40 engineers"],
+            )
+        ],
+    )
+    fixed, report = verify_against_source(
+        tailored, source, _prov("Acme", "Engineer", "Built APIs")
+    )
+    assert fixed.work[0].bullets == ["Built APIs"]
+    assert report.rejected_edits[0].added_text == "Led a team of 40 engineers"
+
+
+def test_verify_keeps_rephrased_bullet_with_provenance():
+    """The rewriter may rephrase a bullet as long as the source supports it."""
+    source = StructuredResume(
+        name="A",
+        work=[
+            WorkExperience(
+                company="Acme", title="Engineer", bullets=["Built REST APIs in Python"]
+            )
+        ],
+    )
+    tailored = StructuredResume(
+        name="A",
+        work=[
+            WorkExperience(
+                company="Acme", title="Engineer", bullets=["Built REST APIs in Python"]
+            )
+        ],
+    )
+    fixed, report = verify_against_source(
+        tailored, source, _prov("Acme", "Engineer", "Built REST APIs in Python")
+    )
+    assert fixed.work[0].bullets == ["Built REST APIs in Python"]
+    assert report.total_edits == 0
+
+
+def test_verify_rejects_fabricated_employer():
+    source = StructuredResume(
+        name="A", work=[WorkExperience(company="Acme", title="Engineer")]
+    )
+    tailored = StructuredResume(
+        name="A",
+        work=[
+            WorkExperience(company="Acme", title="Engineer"),
+            WorkExperience(company="Google", title="Staff Engineer"),
+        ],
+    )
+    fixed, report = verify_against_source(tailored, source, _prov("Acme", "Engineer"))
+    assert [w.company for w in fixed.work] == ["Acme"]
+    assert {r.added_text for r in report.rejected_edits} == {"Google", "Staff Engineer"}
+
+
+def test_verify_preserves_provenance_on_kept_values():
+    """C1: surviving values keep their prov chain."""
+    source = StructuredResume(name="A", skills=["Python"], skills_prov=[["p:d:0"]])
+    tailored = StructuredResume(name="A", skills=["Python"], skills_prov=[["p:d:0"]])
+    fixed, _ = verify_against_source(tailored, source, _prov())
+    assert fixed.skills_prov == [["p:d:0"]]
+
+
+def test_verify_rejects_seniority_inflation():
+    """A span reading "Engineer" must not license the promotion "Staff Engineer"."""
+    source = StructuredResume(name="A", skills=["Python"])
+    tailored = StructuredResume(name="A", skills=["Python", "Senior Python Developer"])
+    fixed, report = verify_against_source(tailored, source, _prov("Python"))
+    assert fixed.skills == ["Python"]
+    assert report.rejected_edits[0].added_text == "Senior Python Developer"
+
+
+def test_verify_keeps_addition_whose_every_word_is_sourced():
+    source = StructuredResume(name="A", skills=[])
+    tailored = StructuredResume(name="A", skills=["Senior Python Developer"])
+    fixed, report = verify_against_source(
+        tailored, source, _prov("Senior Python Developer at Acme")
+    )
+    assert fixed.skills == ["Senior Python Developer"]
+    assert report.verified_edits == 1
+
+
+def test_verify_reports_rejection_reason():
+    source = StructuredResume(name="A", skills=["Python"])
+    tailored = StructuredResume(name="A", skills=["Python", "Kubernetes"])
+    _, report = verify_against_source(tailored, source, _prov())
+    assert report.rejected_edits[0].reason == "no supporting prov_id"

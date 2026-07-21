@@ -1,9 +1,11 @@
 {
+  "backend": "groq",
   "pairs": 12,
   "pairs_scored": 12,
-  "unsourced_shipped_gate_off": 3,
+  "pairs_failed": 0,
+  "unsourced_shipped_gate_off": 0,
   "unsourced_shipped_gate_on": 0,
-  "mean_fabrication_rate": 0.08333333333333333,
+  "mean_fabrication_rate": 0.0,
   "per_pair": [
     {
       "id": "backend-k8s",
@@ -11,7 +13,8 @@
       "unsourced_on": 0,
       "total_edits": 0,
       "fabrication_rate": 0.0,
-      "rejected": []
+      "rejected": [],
+      "seconds": 4.0
     },
     {
       "id": "frontend-react",
@@ -19,7 +22,8 @@
       "unsourced_on": 0,
       "total_edits": 0,
       "fabrication_rate": 0.0,
-      "rejected": []
+      "rejected": [],
+      "seconds": 4.1
     },
     {
       "id": "data-ml",
@@ -27,7 +31,8 @@
       "unsourced_on": 0,
       "total_edits": 0,
       "fabrication_rate": 0.0,
-      "rejected": []
+      "rejected": [],
+      "seconds": 4.3
     },
     {
       "id": "devops-cloud",
@@ -35,7 +40,8 @@
       "unsourced_on": 0,
       "total_edits": 0,
       "fabrication_rate": 0.0,
-      "rejected": []
+      "rejected": [],
+      "seconds": 4.3
     },
     {
       "id": "mobile-ios",
@@ -43,7 +49,8 @@
       "unsourced_on": 0,
       "total_edits": 0,
       "fabrication_rate": 0.0,
-      "rejected": []
+      "rejected": [],
+      "seconds": 3.9
     },
     {
       "id": "security-eng",
@@ -51,19 +58,17 @@
       "unsourced_on": 0,
       "total_edits": 0,
       "fabrication_rate": 0.0,
-      "rejected": []
+      "rejected": [],
+      "seconds": 4.4
     },
     {
       "id": "fullstack-node",
-      "unsourced_off": 3,
+      "unsourced_off": 0,
       "unsourced_on": 0,
-      "total_edits": 3,
-      "fabrication_rate": 1.0,
-      "rejected": [
-        "Acme Corporation",
-        "Software Engineer I",
-        "University of California, Berkeley"
-      ]
+      "total_edits": 0,
+      "fabrication_rate": 0.0,
+      "rejected": [],
+      "seconds": 3.8
     },
     {
       "id": "qa-automation",
@@ -71,7 +76,8 @@
       "unsourced_on": 0,
       "total_edits": 0,
       "fabrication_rate": 0.0,
-      "rejected": []
+      "rejected": [],
+      "seconds": 4.4
     },
     {
       "id": "pm-technical",
@@ -79,7 +85,8 @@
       "unsourced_on": 0,
       "total_edits": 0,
       "fabrication_rate": 0.0,
-      "rejected": []
+      "rejected": [],
+      "seconds": 3.8
     },
     {
       "id": "data-engineer",
@@ -87,7 +94,8 @@
       "unsourced_on": 0,
       "total_edits": 0,
       "fabrication_rate": 0.0,
-      "rejected": []
+      "rejected": [],
+      "seconds": 4.3
     },
     {
       "id": "sre-platform",
@@ -95,7 +103,8 @@
       "unsourced_on": 0,
       "total_edits": 0,
       "fabrication_rate": 0.0,
-      "rejected": []
+      "rejected": [],
+      "seconds": 3.6
     },
     {
       "id": "embedded-firmware",
@@ -103,7 +112,8 @@
       "unsourced_on": 0,
       "total_edits": 0,
       "fabrication_rate": 0.0,
-      "rejected": []
+      "rejected": [],
+      "seconds": 4.3
     }
   ]
 }

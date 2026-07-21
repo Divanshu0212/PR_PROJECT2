@@ -22,8 +22,10 @@ is what rejects malformed output — no silent fills.
 
 import itertools
 import json
+import random
 import re
 import threading
+import time
 
 MODEL = "qwen/qwen3.6-27b"
 _ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
@@ -89,6 +91,8 @@ class GroqClient:
         transport=_httpx_transport,
         temperature: float = 0.6,
         max_tokens: int = 4096,
+        rounds: int = 3,
+        backoff: float = 2.0,
     ):
         self._keys = list(api_keys) if api_keys else load_api_keys_from_file()
         self._cycle = itertools.cycle(self._keys)
@@ -97,6 +101,8 @@ class GroqClient:
         self.transport = transport
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.rounds = rounds
+        self.backoff = backoff
 
     def next_key(self) -> str:
         with self._lock:  # itertools.cycle is not thread-safe
@@ -117,7 +123,11 @@ class GroqClient:
             "reasoning_format": "hidden",
         }
         errors = []
-        for _ in range(len(self._keys)):
+        # One attempt per key per round; extra rounds exist so a burst of 429s
+        # (shared per-account rate limits hit every key at once) waits rather
+        # than burning the whole rotation in milliseconds and failing the pair.
+        attempts = len(self._keys) * self.rounds
+        for attempt in range(attempts):
             key = self.next_key()
             try:
                 raw = self.transport(
@@ -131,4 +141,11 @@ class GroqClient:
                 return json.loads(strip_reasoning(content))
             except Exception as exc:  # try the next key before failing the call
                 errors.append(f"{type(exc).__name__}: {exc}")
-        raise RuntimeError(f"all {len(self._keys)} Groq keys failed: {errors}")
+                exhausted_rotation = (attempt + 1) % len(self._keys) == 0
+                if exhausted_rotation and attempt + 1 < attempts:
+                    # Full jitter: concurrent workers must not retry in lockstep.
+                    delay = min(self.backoff * 2 ** (attempt // len(self._keys)), 30.0)
+                    time.sleep(random.uniform(0, delay))
+        raise RuntimeError(
+            f"all {len(self._keys)} Groq keys failed after {attempts} attempts: {errors[-3:]}"
+        )

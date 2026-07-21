@@ -75,6 +75,25 @@ def test_complete_json_raises_after_exhausting_keys():
     def always_fail(url, headers, payload, timeout):
         raise RuntimeError("boom")
 
-    client = GroqClient(api_keys=["k1", "k2"], transport=always_fail)
+    client = GroqClient(
+        api_keys=["k1", "k2"], transport=always_fail, rounds=1, backoff=0
+    )
     with pytest.raises(RuntimeError):
         client.complete_json("prompt")
+
+
+def test_complete_json_retries_rotation_more_than_once():
+    """A 429 burst hits every key at once; one pass through them is not enough."""
+    calls = []
+
+    def rate_limited_then_ok(url, headers, payload, timeout):
+        calls.append(headers["Authorization"])
+        if len(calls) <= 2:  # both keys 429 on the first rotation
+            raise RuntimeError("429 Too Many Requests")
+        return json.dumps({"choices": [{"message": {"content": '{"ok":true}'}}]})
+
+    client = GroqClient(
+        api_keys=["k1", "k2"], transport=rate_limited_then_ok, rounds=3, backoff=0
+    )
+    assert client.complete_json("prompt") == {"ok": True}
+    assert len(calls) == 3  # recovered on the second rotation

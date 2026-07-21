@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     # site for reproducibility.
     jd_model: str = "gemma3:4b"
     ollama_base_url: str = "http://localhost:11434"
+    # Rewriting (P5) runs on the same CUDA-less host as JD analysis, so it takes
+    # the same Ollama path. Temperature is pinned at the call site (0.6): the
+    # rewriter is meant to be creative, and the verification gate is what makes
+    # that safe.
+    rewrite_model: str = "gemma3:4b"
     # Matcher semantic bands (P3). Provisional defaults — never swept against a
     # labelled match set. Exposed here so P7 can tune them without code changes.
     sem_hi: float = 0.65  # >= this cosine counts a requirement "present"

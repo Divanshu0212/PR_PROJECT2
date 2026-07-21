@@ -8,7 +8,7 @@ defaulted.
 """
 
 from rho.jd.schema import JDSchema, ReqItem, to_requirement_set
-from rho.llm.groq import GroqClient
+from rho.llm.groq import GroqClient, shared_budget
 from rho.models.jd import RequirementSet
 
 _PROMPT = """You extract structured requirements from a job description. Rules:
@@ -46,7 +46,8 @@ _client: GroqClient | None = None
 def _default_client() -> GroqClient:
     global _client
     if _client is None:
-        _client = GroqClient()
+        # Share the account-wide token budget with every other Groq caller.
+        _client = GroqClient(budget=shared_budget())
     return _client
 
 

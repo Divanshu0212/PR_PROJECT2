@@ -276,3 +276,46 @@ def test_unsourced_count_is_zero_after_gating():
     assert unsourced_count(tailored, source, prov) == 2  # gate OFF ships both
     fixed, _ = verify_against_source(tailored, source, prov)
     assert unsourced_count(fixed, source, prov) == 0  # gate ON ships neither
+
+
+# --- bullet rephrasing vs invention (corpus-driven regression) -----------
+
+_SRC_BULLET = (
+    "Worked on optimizing and tuning the Teradata and Oracle views and SQL's "
+    "to improve the performance of batch and response times"
+)
+
+
+def _bullet_case(tailored_bullet: str):
+    source = StructuredResume(
+        name="A",
+        work=[WorkExperience(company="Acme", title="Engineer", bullets=[_SRC_BULLET])],
+    )
+    tailored = StructuredResume(
+        name="A",
+        work=[
+            WorkExperience(company="Acme", title="Engineer", bullets=[tailored_bullet])
+        ],
+    )
+    return verify_against_source(
+        tailored, source, _prov("Acme", "Engineer", _SRC_BULLET)
+    )
+
+
+def test_gate_accepts_genuine_rephrasing_of_a_source_bullet():
+    """Rewriting a bullet is the rewriter's job; only new claims are fabrication."""
+    fixed, report = _bullet_case(
+        "Optimized and tuned Teradata and Oracle views and SQL queries to "
+        "enhance batch processing performance and user data response times."
+    )
+    assert fixed.work[0].bullets != []  # not a fabrication
+    assert report.rejected_edits == []
+
+
+def test_gate_still_rejects_invention_reusing_source_vocabulary():
+    """Sharing words with the source must not launder a new factual claim."""
+    fixed, report = _bullet_case(
+        "Led a team of 40 Teradata and Oracle engineers across three continents."
+    )
+    assert fixed.work[0].bullets == []
+    assert report.rejected_edits[0].added_text.startswith("Led a team of 40")

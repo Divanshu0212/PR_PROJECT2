@@ -10,7 +10,7 @@ by `rho.rewrite.verifier`, which is deterministic and LLM-free.
 """
 
 from rho.extraction.schema import EduItem, ExtractionSchema, WorkItem, to_structured
-from rho.llm.groq import GroqClient
+from rho.llm.groq import GroqClient, shared_budget
 from rho.models.resume import StructuredResume
 from rho.models.scoring import Gap
 
@@ -49,7 +49,8 @@ _client: GroqClient | None = None
 def _default_client() -> GroqClient:
     global _client
     if _client is None:
-        _client = GroqClient()
+        # Share the account-wide token budget with every other Groq caller.
+        _client = GroqClient(budget=shared_budget())
     return _client
 
 

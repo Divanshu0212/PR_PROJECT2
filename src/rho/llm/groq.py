@@ -35,6 +35,19 @@ _THINK = re.compile(r"<think>.*?</think>", re.S)
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
 
 
+_shared_budget: "TokenBudget | None" = None
+_budget_lock = threading.Lock()
+
+
+def shared_budget(tokens_per_minute: int = 8000) -> "TokenBudget":
+    """One budget per process: the account-wide TPM cap is what is being paced."""
+    global _shared_budget
+    with _budget_lock:
+        if _shared_budget is None:
+            _shared_budget = TokenBudget(tokens_per_minute)
+        return _shared_budget
+
+
 def load_api_keys(env_text: str) -> list[str]:
     """Read GROQ_API_KEY from .env text. Accepts a JSON array or a bare key."""
     match = re.search(r"GROQ_API_KEY\s*=\s*(.+)", env_text)
@@ -71,6 +84,42 @@ def strip_reasoning(content: str) -> str:
     if start > 0:
         text = text[start:]
     return text.strip()
+
+
+class TokenBudget:
+    """Sliding-window token pacer shared by every worker on one account.
+
+    Groq's free tier caps *tokens per minute* per account, so key rotation does
+    not help: all keys draw on the same budget. Absorbing 429s and sleeping is
+    strictly worse than not sending — under a saturated budget the retry loop
+    spends its whole time asleep and throughput collapses to zero. This paces
+    requests before they are sent instead.
+    """
+
+    def __init__(self, tokens_per_minute: int = 8000, now=time.monotonic):
+        self.limit = tokens_per_minute
+        self._now = now
+        self._spent: list[tuple[float, int]] = []  # (timestamp, tokens)
+        self._lock = threading.Lock()
+
+    def acquire(self, tokens: int) -> float:
+        """Record `tokens` against the budget; return seconds to wait first."""
+        with self._lock:
+            now = self._now()
+            cutoff = now - 60.0
+            self._spent = [(t, n) for t, n in self._spent if t > cutoff]
+            used = sum(n for _, n in self._spent)
+            wait = 0.0
+            if used + tokens > self.limit and self._spent:
+                # Wait for the oldest entry to age out of the window.
+                wait = max(0.0, self._spent[0][0] + 60.0 - now)
+            self._spent.append((now + wait, min(tokens, self.limit)))
+            return wait
+
+
+def estimate_tokens(text: str) -> int:
+    """Rough token count for budgeting (~4 chars/token), plus generation headroom."""
+    return len(text) // 4
 
 
 class RateLimited(Exception):
@@ -122,6 +171,7 @@ class GroqClient:
         rounds: int = 3,
         backoff: float = 2.0,
         max_wait: float = 70.0,
+        budget: "TokenBudget | None" = None,
     ):
         self._keys = list(api_keys) if api_keys else load_api_keys_from_file()
         self._cycle = itertools.cycle(self._keys)
@@ -133,6 +183,7 @@ class GroqClient:
         self.rounds = rounds
         self.backoff = backoff
         self.max_wait = max_wait
+        self.budget = budget
 
     def next_key(self) -> str:
         with self._lock:  # itertools.cycle is not thread-safe
@@ -152,6 +203,13 @@ class GroqClient:
             # Suppress the <think> block server-side; see module docstring.
             "reasoning_format": "hidden",
         }
+        if self.budget is not None:
+            # Charge prompt + expected completion so the pacer is not surprised
+            # by the model's own output.
+            wait = self.budget.acquire(estimate_tokens(prompt) + 600)
+            if wait > 0:
+                time.sleep(wait)
+
         errors = []
         # One attempt per key per round; extra rounds exist so a burst of 429s
         # (shared per-account rate limits hit every key at once) waits rather

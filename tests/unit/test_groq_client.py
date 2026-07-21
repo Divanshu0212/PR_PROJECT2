@@ -152,3 +152,60 @@ def test_rate_limit_wait_is_capped():
     finally:
         mod.time.sleep = original
     assert all(s <= 71 for s in slept)  # never blocks for the full hour
+
+
+# --- token budget pacing -------------------------------------------------
+
+
+def test_budget_allows_requests_within_limit():
+    """Under the cap, nothing should wait."""
+    from rho.llm.groq import TokenBudget
+
+    clock = [0.0]
+    budget = TokenBudget(tokens_per_minute=8000, now=lambda: clock[0])
+    assert budget.acquire(3000) == 0.0
+    assert budget.acquire(3000) == 0.0
+
+
+def test_budget_waits_when_window_is_exhausted():
+    """Over the cap, the caller is told how long to wait for the window to roll."""
+    from rho.llm.groq import TokenBudget
+
+    clock = [0.0]
+    budget = TokenBudget(tokens_per_minute=8000, now=lambda: clock[0])
+    budget.acquire(7000)
+    wait = budget.acquire(3000)  # would exceed 8000 within the same minute
+    assert 0 < wait <= 60
+
+
+def test_budget_frees_capacity_after_window_rolls():
+    from rho.llm.groq import TokenBudget
+
+    clock = [0.0]
+    budget = TokenBudget(tokens_per_minute=8000, now=lambda: clock[0])
+    budget.acquire(8000)
+    clock[0] = 61.0  # a minute later the window has rolled
+    assert budget.acquire(8000) == 0.0
+
+
+def test_client_paces_against_shared_budget():
+    """The client must wait before sending, not after being refused."""
+    from rho.llm.groq import TokenBudget
+
+    clock, slept = [0.0], []
+    budget = TokenBudget(tokens_per_minute=1000, now=lambda: clock[0])
+    budget.acquire(1000)  # window already full
+
+    def ok(url, headers, payload, timeout):
+        return json.dumps({"choices": [{"message": {"content": '{"ok":true}'}}]})
+
+    client = GroqClient(api_keys=["k"], transport=ok, budget=budget)
+    import rho.llm.groq as mod
+
+    original = mod.time.sleep
+    mod.time.sleep = slept.append
+    try:
+        assert client.complete_json("hello") == {"ok": True}
+    finally:
+        mod.time.sleep = original
+    assert slept and slept[0] > 0  # paced before sending

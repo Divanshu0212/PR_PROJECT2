@@ -13,6 +13,8 @@ same (tailored, source, prov) it always renders the same verdict, which is what
 makes the fabrication rate a reproducible metric rather than a model opinion.
 """
 
+import re
+
 from rapidfuzz import fuzz
 
 from rho.extraction.provenance_attach import find_prov
@@ -29,7 +31,24 @@ _NO_PROV = "no supporting prov_id"
 # a fabricated bullet would pass on the strength of one incidental word. Whole
 # strings are therefore compared with `token_set_ratio` against the source
 # bullets: rephrasing survives, new claims do not.
-_BULLET_SIMILARITY = 90
+#
+# Threshold calibrated on corpus rewrites (`eval/fabrication_corpus.py`): genuine
+# rephrasings of a source bullet score 68-87, while inventions score 37-42. 90
+# was above *every* real rephrasing and rejected them all as fabrications; 60
+# sits in the empty band between the two classes.
+_BULLET_SIMILARITY = 60
+
+# Similarity alone is not enough — a long invention that reuses the source's
+# vocabulary scores well ("Led a team of 40 Teradata engineers"). But requiring
+# every *word* to be sourced is too strict in the other direction: rephrasing
+# legitimately swaps synonyms ("improve" -> "enhance") and irregular inflections
+# ("tuning" -> "tuned"), none of which assert a new fact.
+#
+# What C3 actually protects is *hard content*: tools, orgs, acronyms, numbers,
+# dates. So a bullet is checked for newly-introduced hard tokens, not new prose.
+# Capitalised terms mid-sentence, all-caps acronyms, and digit runs qualify; the
+# leading word is skipped because sentence case capitalises any opening verb.
+_HARD_IN_BULLET = re.compile(r"\b([A-Z][A-Za-z0-9+#.]+|[A-Z]{2,}|\d[\d,.$%/-]*)\b")
 
 # `find_prov` locating a span is necessary but not sufficient for the gate. It is
 # tuned for Phase-2 extraction (tolerant, substring-based), so a span reading
@@ -42,6 +61,19 @@ _WORD_MATCH = 88
 _STOPWORDS = frozenset({"of", "and", "in", "at", "the", "a", "an", "for", "to", "&"})
 
 
+def _stem(word: str) -> str:
+    """Crude suffix stripper so inflections of a source word compare equal.
+
+    Deliberately not a real stemmer: no new dependency, and the gate only needs
+    "optimizing"/"optimized" to collide, not linguistic correctness.
+    """
+    word = word.strip("'.-")
+    for suffix in ("ations", "ation", "ingly", "ing", "edly", "ed", "es", "s", "ly"):
+        if len(word) - len(suffix) >= 4 and word.endswith(suffix):
+            return word[: -len(suffix)]
+    return word
+
+
 class _Ledger:
     """Accumulates verdicts so every field type shares one counting rule."""
 
@@ -50,21 +82,62 @@ class _Ledger:
         self._src_bullets = [
             b.strip().lower() for w in source.work for b in w.bullets if b.strip()
         ]
+        # Stems of every word the source states anywhere — a bullet may
+        # legitimately pull a term from the skills list or a job title.
+        blob = " ".join(
+            [v.lower() for v, _ in hard_content_tokens(source)]
+            + self._src_bullets
+            + [(source.summary or "").lower(), (source.headline or "").lower()]
+        )
+        self._src_stems = {
+            _stem(w) for w in re.findall(r"[a-z0-9][a-z0-9'+#.-]*", blob)
+        }
         self._prov = prov
         self.total = 0
         self.verified = 0
         self.rejected: list[RejectedEdit] = []
 
     def accept_bullet(self, bullet: str) -> bool:
-        """True if `bullet` restates a source bullet closely enough to ship."""
+        """True if `bullet` restates a source bullet closely enough to ship.
+
+        Two conditions, both required: it must closely track some source bullet,
+        *and* introduce no unsourced hard-content token. Similarity alone would
+        let a long invention pass on borrowed vocabulary; requiring every word to
+        be sourced would reject ordinary rewording.
+        """
         if not bullet or not bullet.strip():
             return True
         b = bullet.strip().lower()
-        if any(fuzz.token_set_ratio(b, s) >= _BULLET_SIMILARITY for s in self._src_bullets):
+        nearest = max(
+            (fuzz.token_set_ratio(b, s) for s in self._src_bullets), default=0
+        )
+        if nearest >= _BULLET_SIMILARITY and not self._unsourced_hard_tokens(bullet):
             return True  # a rephrasing of something the source already claims
         self.total += 1
         self.rejected.append(RejectedEdit(added_text=bullet, reason=_NO_PROV))
         return False
+
+    def _unsourced_hard_tokens(self, bullet: str) -> list[str]:
+        """Hard-content tokens the bullet introduces without support.
+
+        Compared by stem so ordinary inflection ("optimizing" -> "optimized")
+        does not read as a new fact; a genuinely new tool, org, or number has no
+        stem in the source and no supporting span.
+        """
+        unsourced = []
+        # Skip the leading word: sentence case capitalises whatever verb opens it.
+        body = bullet.split(None, 1)[1] if " " in bullet.strip() else ""
+        for match in _HARD_IN_BULLET.finditer(body):
+            token = match.group(1)
+            low = token.lower()
+            if low in _STOPWORDS or len(low) < 2:
+                continue
+            if _stem(low) in self._src_stems:
+                continue
+            if find_prov(token, self._prov):
+                continue
+            unsourced.append(token)
+        return unsourced
 
     def accept(self, value: str) -> bool:
         """True if `value` may ship. Counts it as an edit only when it is new."""

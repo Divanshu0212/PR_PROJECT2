@@ -255,3 +255,24 @@ def test_rewrite_keeps_truthful_tailoring():
     tr = rewrite(source, [], _prov("Python", "FastAPI"), _rewrite_fn=fake)
     assert "FastAPI" in tr.resume.skills
     assert tr.fabrication_report.fabrication_rate == 0.0
+
+
+# --- ablation accounting ------------------------------------------------
+
+
+def test_unsourced_count_is_zero_after_gating():
+    """The gate-ON metric must re-measure the gated résumé, not assume success.
+
+    The plan's sketch computed `(total-verified) - len(rejected)`, which is
+    identically 0 by arithmetic and so would report success even if the gate
+    leaked. This measures the output instead.
+    """
+    from eval.fabrication_ablation import unsourced_count
+
+    source = StructuredResume(name="A", skills=["Python"])
+    tailored = StructuredResume(name="A", skills=["Python", "Kubernetes", "Rust"])
+    prov = _prov()
+
+    assert unsourced_count(tailored, source, prov) == 2  # gate OFF ships both
+    fixed, _ = verify_against_source(tailored, source, prov)
+    assert unsourced_count(fixed, source, prov) == 0  # gate ON ships neither

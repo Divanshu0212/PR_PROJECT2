@@ -195,7 +195,9 @@ def main() -> None:
         from eval.fabrication_corpus import build_corpus_pairs
 
         print(f"building {args.corpus} corpus pairs (JD analysis via LLM)...")
-        pairs = build_corpus_pairs(n_pairs=args.corpus, seed=args.seed)
+        pairs = build_corpus_pairs(
+            n_pairs=args.corpus, seed=args.seed, workers=args.workers
+        )
     else:
         pairs = load_pairs()
     if args.limit:

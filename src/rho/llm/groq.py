@@ -167,7 +167,11 @@ class GroqClient:
         model: str = MODEL,
         transport=_httpx_transport,
         temperature: float = 0.6,
-        max_tokens: int = 4096,
+        # Groq reserves `max_tokens` against the per-minute budget when the
+        # request is admitted, not when it is spent: at 4096 a single call claims
+        # half the 8k window and 429s immediately, while 1500 is served at once.
+        # Sized to hold a full rewritten résumé and no more.
+        max_tokens: int = 1500,
         rounds: int = 3,
         backoff: float = 2.0,
         max_wait: float = 70.0,
@@ -232,9 +236,12 @@ class GroqClient:
                 if attempt + 1 >= attempts:
                     break
                 if isinstance(exc, RateLimited):
-                    # Token-per-minute limits are account-wide, so every key is
-                    # throttled together: waiting out the server's own reset beats
-                    # spinning through the rotation.
+                    # Keys may belong to different orgs, and the limit is per-org
+                    # per-model: a key that 429s says nothing about the next one.
+                    # Only sleep once the whole rotation has been tried, or a
+                    # throttled first key would stall a call the others could serve.
+                    if (attempt + 1) % len(self._keys) != 0:
+                        continue
                     time.sleep(min(exc.retry_after, self.max_wait) + random.uniform(0, 1))
                 elif (attempt + 1) % len(self._keys) == 0:
                     # Full jitter: concurrent workers must not retry in lockstep.

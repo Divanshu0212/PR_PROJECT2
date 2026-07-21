@@ -15,9 +15,15 @@ structure first; provenance is then built by the real ingest path over the
 segmented text, so offsets stay honest.
 """
 
+import os
 import re
 
-from rho.ingestion import ingest
+# Must precede any torch import: sentence-transformers otherwise sizes its
+# intra-op pool to all 16 cores per calling thread and thrashes.
+os.environ.setdefault("OMP_NUM_THREADS", "4")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+from rho.ingestion import ingest  # noqa: E402
 from rho.models.provenance import ProvenanceMap
 from rho.models.resume import StructuredResume
 
@@ -69,29 +75,43 @@ def build_corpus_pairs(
 
     failures: list[str] = []
 
-    def _build(indexed):
-        i, (resume, jd_text) = indexed
+    def _analyze(indexed):
+        """Network-bound half: safe to run concurrently."""
+        i, (_, jd_text) = indexed
         try:
-            reqs = analyze_jd_schema_groq(jd_text)
+            return i, analyze_jd_schema_groq(jd_text)
         except Exception as exc:
             # Never drop silently: a swallowed 429 would shrink the benchmark
             # without saying so, which reads as a clean run on fewer pairs.
             failures.append(f"corpus-{seed}-{i}: {type(exc).__name__}: {exc}")
-            return None
-        gaps = [g for g in match(resume, reqs).gaps if g.status != "present"]
-        return {
-            "id": f"corpus-{seed}-{i}",
-            "resume": resume,
-            "prov": _prov_for(resume, i),
-            "jd": jd_text,
-            "gaps": gaps,
-            "tempting_absent": [g.requirement.text for g in gaps],
-        }
+            return i, None
 
-    # JD analysis is a network round-trip per pair; keys round-robin underneath.
+    # Phase 1 — JD analysis is a network round-trip per pair; keys round-robin
+    # underneath and `TokenBudget` paces the account-wide TPM cap.
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        built = list(pool.map(_build, enumerate(raw_pairs)))
-    kept = [p for p in built if p is not None]
+        analyzed = dict(pool.map(_analyze, enumerate(raw_pairs)))
+
+    # Phase 2 — `match()` runs sentence-transformers on CPU. Torch spawns its own
+    # intra-op pool per caller, so calling it from N worker threads oversubscribes
+    # the machine (measured: 98 threads on 16 cores, all futex-blocked, throughput
+    # near zero). Embedding is therefore done serially, on the main thread.
+    kept = []
+    for i, (resume, jd_text) in enumerate(raw_pairs):
+        reqs = analyzed.get(i)
+        if reqs is None:
+            continue
+        gaps = [g for g in match(resume, reqs).gaps if g.status != "present"]
+        kept.append(
+            {
+                "id": f"corpus-{seed}-{i}",
+                "resume": resume,
+                "prov": _prov_for(resume, i),
+                "jd": jd_text,
+                "gaps": gaps,
+                "tempting_absent": [g.requirement.text for g in gaps],
+            }
+        )
+
     if failures:
         print(
             f"  WARNING: {len(failures)}/{len(raw_pairs)} pairs dropped during JD "

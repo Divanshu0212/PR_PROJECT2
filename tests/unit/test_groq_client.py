@@ -108,18 +108,22 @@ def test_parse_duration_handles_groq_formats():
 
 
 def test_rate_limited_waits_for_server_reset_not_blind_backoff():
-    """TPM limits are account-wide, so rotating keys alone cannot recover."""
+    """Once every key is throttled, wait the server's stated reset — not a guess.
+
+    The wait only happens after a full rotation; a single throttled key falls
+    through to the next (see the fall-through test below).
+    """
     from rho.llm.groq import RateLimited
 
     slept, calls = [], []
 
-    def limited_once(url, headers, payload, timeout):
+    def limited_twice(url, headers, payload, timeout):
         calls.append(1)
-        if len(calls) == 1:
+        if len(calls) <= 2:  # both keys throttled: the rotation is exhausted
             raise RateLimited(12.0, "429")
         return json.dumps({"choices": [{"message": {"content": '{"ok":true}'}}]})
 
-    client = GroqClient(api_keys=["k1", "k2"], transport=limited_once, max_wait=70)
+    client = GroqClient(api_keys=["k1", "k2"], transport=limited_twice, max_wait=70)
     import rho.llm.groq as mod
 
     original = mod.time.sleep
@@ -209,3 +213,28 @@ def test_client_paces_against_shared_budget():
     finally:
         mod.time.sleep = original
     assert slept and slept[0] > 0  # paced before sending
+
+
+def test_rate_limited_key_falls_through_to_next_before_sleeping():
+    """Keys span different orgs; one being throttled says nothing about the next."""
+    from rho.llm.groq import RateLimited
+
+    slept, calls = [], []
+
+    def first_key_limited(url, headers, payload, timeout):
+        calls.append(headers["Authorization"])
+        if len(calls) == 1:
+            raise RateLimited(70.0, "429")
+        return json.dumps({"choices": [{"message": {"content": '{"ok":true}'}}]})
+
+    client = GroqClient(api_keys=["k1", "k2", "k3"], transport=first_key_limited)
+    import rho.llm.groq as mod
+
+    original = mod.time.sleep
+    mod.time.sleep = slept.append
+    try:
+        assert client.complete_json("p") == {"ok": True}
+    finally:
+        mod.time.sleep = original
+    assert calls == ["Bearer k1", "Bearer k2"]  # tried the next key
+    assert slept == []  # and did not sleep 70s to do it

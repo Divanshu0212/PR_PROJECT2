@@ -2,6 +2,8 @@
 
 from rho.models.provenance import ProvenanceMap, SourceSpan
 from rho.models.resume import Education, StructuredResume, WorkExperience
+from rho.models.rewrite import TailoredResume
+from rho.rewrite import rewrite
 from rho.rewrite.tokens import hard_content_tokens
 from rho.rewrite.verifier import verify_against_source
 
@@ -219,3 +221,37 @@ def test_verify_reports_rejection_reason():
     tailored = StructuredResume(name="A", skills=["Python", "Kubernetes"])
     _, report = verify_against_source(tailored, source, _prov())
     assert report.rejected_edits[0].reason == "no supporting prov_id"
+
+
+# --- rewrite() orchestration: generate -> gate --------------------------
+
+
+def test_rewrite_gate_strips_fabrication():
+    source = StructuredResume(name="A", skills=["Python"])
+
+    def fake(r, g):
+        return StructuredResume(name="A", skills=["Python", "GoLang"])  # invented
+
+    tr = rewrite(source, [], _prov(), _rewrite_fn=fake)
+    assert "GoLang" not in tr.resume.skills
+    assert tr.fabrication_report.fabrication_rate == 1.0
+
+
+def test_rewrite_returns_tailored_resume_with_report():
+    source = StructuredResume(name="A", skills=["Python"])
+    tr = rewrite(source, [], _prov(), _rewrite_fn=lambda r, g: r)
+    assert isinstance(tr, TailoredResume)
+    assert tr.resume.skills == ["Python"]
+    assert tr.fabrication_report.total_edits == 0
+
+
+def test_rewrite_keeps_truthful_tailoring():
+    """The gate must not punish a rewrite that only surfaces sourced content."""
+    source = StructuredResume(name="A", skills=["Python"])
+
+    def fake(r, g):
+        return StructuredResume(name="A", skills=["Python", "FastAPI"])
+
+    tr = rewrite(source, [], _prov("Python", "FastAPI"), _rewrite_fn=fake)
+    assert "FastAPI" in tr.resume.skills
+    assert tr.fabrication_report.fabrication_rate == 0.0

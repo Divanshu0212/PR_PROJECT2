@@ -7,8 +7,23 @@ from rho.rewrite.verifier import verify_against_source
 __all__ = ["rewrite", "verify", "verify_against_source"]
 
 
-def rewrite(resume: StructuredResume, gaps: list[Gap]) -> TailoredResume:
-    raise NotImplementedError
+def rewrite(
+    resume: StructuredResume,
+    gaps: list[Gap],
+    prov: ProvenanceMap,
+    _rewrite_fn=None,
+) -> TailoredResume:
+    """Tailor `resume` toward `gaps`, then gate the result against `prov`.
+
+    Signature extends the frozen Section-6 `rewrite(resume, gaps)` with `prov`:
+    the verification gate cannot run without the provenance map, and C3 requires
+    that nothing ships ungated. Shared context Section 6 records the change.
+    """
+    if _rewrite_fn is None:
+        from rho.rewrite.llm import rewrite_schema as _rewrite_fn
+    tailored = _rewrite_fn(resume, gaps)
+    fixed, report = verify_against_source(tailored, resume, prov)
+    return TailoredResume(resume=fixed, fabrication_report=report)
 
 
 def verify(tailored: StructuredResume, prov: ProvenanceMap) -> FabricationReport:

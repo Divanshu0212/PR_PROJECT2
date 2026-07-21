@@ -186,8 +186,16 @@ class Calibrator:
     def predict(self, cv: ComponentVector) -> float: ...   # 0..100
 
 # rewrite/ (P5)
-def rewrite(resume: StructuredResume, gaps: list[Gap]) -> TailoredResume: ...
+# SIGNATURE CHANGE (P5): `prov` added. The gate cannot verify without the
+# provenance map, and C3 forbids shipping an ungated rewrite. P6 must pass it.
+def rewrite(resume: StructuredResume, gaps: list[Gap], prov: ProvenanceMap) -> TailoredResume: ...
+# `verify` keeps its frozen signature but raises RuntimeError: distinguishing an
+# *addition* from a reorder needs the source résumé, which this signature cannot
+# carry. Call `verify_against_source(tailored, source, prov)` instead — that is
+# what `rewrite()` uses internally.
 def verify(tailored: StructuredResume, prov: ProvenanceMap) -> FabricationReport: ...
+def verify_against_source(tailored: StructuredResume, source: StructuredResume,
+                          prov: ProvenanceMap) -> tuple[StructuredResume, FabricationReport]: ...
 
 # graph/ (P6)
 def run_pipeline(file_bytes: bytes, filename: str, jd_text: str) -> PipelineResponse: ...

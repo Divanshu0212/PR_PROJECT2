@@ -73,12 +73,40 @@ def strip_reasoning(content: str) -> str:
     return text.strip()
 
 
+class RateLimited(Exception):
+    """429 from Groq, carrying the server's requested wait in seconds."""
+
+    def __init__(self, retry_after: float, message: str):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 def _httpx_transport(url: str, headers: dict, payload: dict, timeout: int) -> str:
     import httpx
 
     response = httpx.post(url, headers=headers, json=payload, timeout=timeout)
+    if response.status_code == 429:
+        # The free tier limits *tokens* per minute (8k), not just requests, and
+        # the reset header is far more accurate than guessing at a backoff.
+        raw = response.headers.get("retry-after") or response.headers.get(
+            "x-ratelimit-reset-tokens", "5"
+        )
+        raise RateLimited(_parse_duration(raw), f"429: {response.text[:120]}")
     response.raise_for_status()
     return response.text
+
+
+def _parse_duration(raw: str) -> float:
+    """Groq expresses resets as plain seconds or as e.g. `1m33.5s`."""
+    raw = str(raw).strip()
+    try:
+        return float(raw)
+    except ValueError:
+        pass
+    total, match = 0.0, re.findall(r"(\d+(?:\.\d+)?)([hms])", raw)
+    for value, unit in match:
+        total += float(value) * {"h": 3600, "m": 60, "s": 1}[unit]
+    return total or 5.0
 
 
 class GroqClient:
@@ -93,6 +121,7 @@ class GroqClient:
         max_tokens: int = 4096,
         rounds: int = 3,
         backoff: float = 2.0,
+        max_wait: float = 70.0,
     ):
         self._keys = list(api_keys) if api_keys else load_api_keys_from_file()
         self._cycle = itertools.cycle(self._keys)
@@ -103,6 +132,7 @@ class GroqClient:
         self.max_tokens = max_tokens
         self.rounds = rounds
         self.backoff = backoff
+        self.max_wait = max_wait
 
     def next_key(self) -> str:
         with self._lock:  # itertools.cycle is not thread-safe
@@ -141,8 +171,14 @@ class GroqClient:
                 return json.loads(strip_reasoning(content))
             except Exception as exc:  # try the next key before failing the call
                 errors.append(f"{type(exc).__name__}: {exc}")
-                exhausted_rotation = (attempt + 1) % len(self._keys) == 0
-                if exhausted_rotation and attempt + 1 < attempts:
+                if attempt + 1 >= attempts:
+                    break
+                if isinstance(exc, RateLimited):
+                    # Token-per-minute limits are account-wide, so every key is
+                    # throttled together: waiting out the server's own reset beats
+                    # spinning through the rotation.
+                    time.sleep(min(exc.retry_after, self.max_wait) + random.uniform(0, 1))
+                elif (attempt + 1) % len(self._keys) == 0:
                     # Full jitter: concurrent workers must not retry in lockstep.
                     delay = min(self.backoff * 2 ** (attempt // len(self._keys)), 30.0)
                     time.sleep(random.uniform(0, delay))

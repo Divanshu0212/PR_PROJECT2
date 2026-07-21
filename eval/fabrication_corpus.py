@@ -60,17 +60,23 @@ def build_corpus_pairs(
     from rho.jd.groq import analyze_jd_schema_groq
     from rho.matching import match
 
-    raw_pairs = build_pairs(
-        n_pairs=n_pairs, seed=seed, resume_csv=resume_csv, jd_csv=jd_csv
-    )
+    raw_pairs = [
+        (_trim(resume), jd_text)
+        for resume, jd_text in build_pairs(
+            n_pairs=n_pairs, seed=seed, resume_csv=resume_csv, jd_csv=jd_csv
+        )
+    ]
+
+    failures: list[str] = []
 
     def _build(indexed):
         i, (resume, jd_text) = indexed
         try:
             reqs = analyze_jd_schema_groq(jd_text)
-        except Exception:
-            # A JD that will not parse yields no gaps rather than killing the run;
-            # the pair still exercises the gate, just without targeted pressure.
+        except Exception as exc:
+            # Never drop silently: a swallowed 429 would shrink the benchmark
+            # without saying so, which reads as a clean run on fewer pairs.
+            failures.append(f"corpus-{seed}-{i}: {type(exc).__name__}: {exc}")
             return None
         gaps = [g for g in match(resume, reqs).gaps if g.status != "present"]
         return {
@@ -85,7 +91,39 @@ def build_corpus_pairs(
     # JD analysis is a network round-trip per pair; keys round-robin underneath.
     with ThreadPoolExecutor(max_workers=workers) as pool:
         built = list(pool.map(_build, enumerate(raw_pairs)))
-    return [p for p in built if p is not None]
+    kept = [p for p in built if p is not None]
+    if failures:
+        print(
+            f"  WARNING: {len(failures)}/{len(raw_pairs)} pairs dropped during JD "
+            f"analysis. First: {failures[0][:160]}"
+        )
+    return kept
+
+
+# Groq's free tier caps *tokens per minute* (8k), not just requests, and a full
+# corpus résumé plus its JD runs ~2.5k tokens — five parallel workers exhaust the
+# budget immediately. Trimming keeps every field type represented (so the gate's
+# work/education/bullet paths still get exercised) at a third of the payload.
+_MAX_SKILLS = 12
+_MAX_BULLETS = 6
+_MAX_BULLET_CHARS = 220
+
+
+def _trim(resume: StructuredResume) -> StructuredResume:
+    """Shrink a corpus résumé to fit the token budget, keeping all field types.
+
+    Applied before provenance is built, so `_prov_for` sees exactly the values
+    that survive — a value trimmed away is simply not in the source document, and
+    the gate stays consistent with what it is shown.
+    """
+    trimmed = resume.model_copy(deep=True)
+    trimmed.skills = trimmed.skills[:_MAX_SKILLS]
+    trimmed.summary = (trimmed.summary or "")[:400] or None
+    for work in trimmed.work:
+        work.bullets = [b[:_MAX_BULLET_CHARS] for b in work.bullets[:_MAX_BULLETS]]
+    for edu in trimmed.education:
+        edu.institution = edu.institution[:200]
+    return trimmed
 
 
 def _prov_for(resume: StructuredResume, idx: int) -> ProvenanceMap:

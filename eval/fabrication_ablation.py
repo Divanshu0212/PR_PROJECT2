@@ -17,7 +17,9 @@ Usage: python -m eval.fabrication_ablation [--limit N] [--out results.json]
 
 import argparse
 import json
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from rho.ingestion import ingest
@@ -25,10 +27,20 @@ from rho.models.jd import Requirement
 from rho.models.provenance import ProvenanceMap
 from rho.models.resume import StructuredResume
 from rho.models.scoring import Gap
-from rho.rewrite.llm import rewrite_schema
 from rho.rewrite.verifier import verify_against_source
 
 PAIRS_PATH = Path(__file__).parent.parent / "tests/fixtures/fabrication/pairs.json"
+
+
+def get_rewriter(backend: str):
+    """Resolve the rewrite function for `backend` ("groq" or "ollama")."""
+    if backend == "groq":
+        from rho.rewrite.groq import rewrite_schema_groq
+
+        return rewrite_schema_groq
+    from rho.rewrite.llm import rewrite_schema
+
+    return rewrite_schema
 
 
 def load_pairs(path: Path = PAIRS_PATH) -> list[dict]:
@@ -77,49 +89,78 @@ def unsourced_count(resume: StructuredResume, source: StructuredResume, prov: Pr
     return rep.total_edits - rep.verified_edits
 
 
-def run(pairs: list[dict], verbose: bool = True) -> dict:
-    off_total = on_total = 0
-    rates: list[float] = []
-    per_pair = []
+def _score_pair(pair: dict, rewriter) -> dict:
+    """Rewrite one pair and score it under both conditions."""
+    source, prov = pair["resume"], pair["prov"]
+    started = time.monotonic()
+    try:
+        raw = rewriter(source, pair["gaps"])  # gate OFF: ship as generated
+    except Exception as exc:  # a dead model must not look like a clean run
+        return {"id": pair["id"], "error": str(exc)}
 
-    for i, pair in enumerate(pairs, 1):
-        source, prov = pair["resume"], pair["prov"]
-        started = time.monotonic()
-        try:
-            raw = rewrite_schema(source, pair["gaps"])  # gate OFF: ship as generated
-        except Exception as exc:  # a dead model must not look like a clean run
-            print(f"  [{i}/{len(pairs)}] {pair['id']}: FAILED ({exc})")
-            per_pair.append({"id": pair["id"], "error": str(exc)})
-            continue
+    off = unsourced_count(raw, source, prov)
+    fixed, rep = verify_against_source(raw, source, prov)  # gate ON
+    on = unsourced_count(fixed, source, prov)  # what actually survives the gate
+    return {
+        "id": pair["id"],
+        "unsourced_off": off,
+        "unsourced_on": on,
+        "total_edits": rep.total_edits,
+        "fabrication_rate": rep.fabrication_rate,
+        "rejected": [r.added_text for r in rep.rejected_edits],
+        "seconds": round(time.monotonic() - started, 1),
+    }
 
-        off = unsourced_count(raw, source, prov)
-        fixed, rep = verify_against_source(raw, source, prov)  # gate ON
-        on = unsourced_count(fixed, source, prov)  # what survives the gate
 
-        off_total += off
-        on_total += on
-        rates.append(rep.fabrication_rate)
-        per_pair.append(
-            {
-                "id": pair["id"],
-                "unsourced_off": off,
-                "unsourced_on": on,
-                "total_edits": rep.total_edits,
-                "fabrication_rate": rep.fabrication_rate,
-                "rejected": [r.added_text for r in rep.rejected_edits],
-            }
-        )
-        if verbose:
-            print(
-                f"  [{i}/{len(pairs)}] {pair['id']}: "
-                f"OFF={off} ON={on} rate={rep.fabrication_rate:.2f} "
-                f"({time.monotonic() - started:.0f}s)"
-            )
+def run(
+    pairs: list[dict],
+    verbose: bool = True,
+    backend: str = "groq",
+    workers: int = 5,
+) -> dict:
+    """Score every pair, `workers` at a time.
+
+    Groq requests round-robin across the available API keys, so concurrency
+    spreads load across quotas rather than hammering one. Results are collected
+    into input order regardless of completion order, keeping runs comparable.
+    """
+    rewriter = get_rewriter(backend)
+    results: dict[int, dict] = {}
+    done = 0
+    lock = threading.Lock()
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_score_pair, pair, rewriter): i for i, pair in enumerate(pairs)
+        }
+        for future in as_completed(futures):
+            i = futures[future]
+            record = future.result()
+            results[i] = record
+            if verbose:
+                with lock:
+                    done += 1
+                    if "error" in record:
+                        print(f"  [{done}/{len(pairs)}] {record['id']}: FAILED ({record['error'][:80]})")
+                    else:
+                        print(
+                            f"  [{done}/{len(pairs)}] {record['id']}: "
+                            f"OFF={record['unsourced_off']} ON={record['unsourced_on']} "
+                            f"rate={record['fabrication_rate']:.2f} ({record['seconds']:.0f}s)"
+                        )
+
+    per_pair = [results[i] for i in sorted(results)]
+    scored = [p for p in per_pair if "error" not in p]
+    off_total = sum(p["unsourced_off"] for p in scored)
+    on_total = sum(p["unsourced_on"] for p in scored)
+    rates = [p["fabrication_rate"] for p in scored]
 
     mean_rate = sum(rates) / len(rates) if rates else 0.0
     summary = {
+        "backend": backend,
         "pairs": len(pairs),
         "pairs_scored": len(rates),
+        "pairs_failed": len(per_pair) - len(scored),
         "unsourced_shipped_gate_off": off_total,
         "unsourced_shipped_gate_on": on_total,
         "mean_fabrication_rate": mean_rate,
@@ -128,6 +169,7 @@ def run(pairs: list[dict], verbose: bool = True) -> dict:
     print(
         f"\nunsourced additions shipped  gate-OFF={off_total}  gate-ON={on_total}"
         f"\nmean fabrication_rate = {mean_rate:.3f}  over {len(rates)} pairs"
+        f"  ({len(per_pair) - len(scored)} failed)"
     )
     return summary
 
@@ -135,14 +177,34 @@ def run(pairs: list[dict], verbose: bool = True) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--backend", default="groq", choices=["groq", "ollama"])
+    ap.add_argument("--workers", type=int, default=5)
+    ap.add_argument(
+        "--corpus",
+        type=int,
+        default=0,
+        metavar="N",
+        help="draw N pairs from Resume.csv x training_data.csv instead of the "
+        "curated fixture (real work history, bullets, and JD-derived gaps)",
+    )
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", type=Path, default=Path(__file__).parent / "fabrication_results.json")
     args = ap.parse_args()
 
-    pairs = load_pairs()
+    if args.corpus:
+        from eval.fabrication_corpus import build_corpus_pairs
+
+        print(f"building {args.corpus} corpus pairs (JD analysis via LLM)...")
+        pairs = build_corpus_pairs(n_pairs=args.corpus, seed=args.seed)
+    else:
+        pairs = load_pairs()
     if args.limit:
         pairs = pairs[: args.limit]
-    print(f"running fabrication ablation on {len(pairs)} pairs...")
-    summary = run(pairs)
+    print(
+        f"running fabrication ablation on {len(pairs)} pairs "
+        f"[backend={args.backend}, workers={args.workers}]..."
+    )
+    summary = run(pairs, backend=args.backend, workers=args.workers)
     args.out.write_text(json.dumps(summary, indent=2))
     print(f"wrote {args.out}")
 

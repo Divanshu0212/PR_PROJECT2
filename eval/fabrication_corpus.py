@@ -46,6 +46,7 @@ def build_corpus_pairs(
     seed: int = 0,
     resume_csv: str = "Resume.csv",
     jd_csv: str = "training_data.csv",
+    workers: int = 5,
 ) -> list[dict]:
     """Corpus résumé × JD pairs shaped for `eval.fabrication_ablation.run`.
 
@@ -53,32 +54,38 @@ def build_corpus_pairs(
     than a hand-written "tempting" list, so the pressure on the rewriter is
     whatever the JD actually demands and the résumé actually lacks.
     """
-    from eval.corpus import build_pairs
-    from rho.jd import analyze_jd
+    from concurrent.futures import ThreadPoolExecutor
 
-    # Same deviation as Phase 4's calibrator: `rho.jd.llm` needs CUDA, this host
-    # has none, so JD analysis goes through the Ollama path.
-    from rho.jd.ollama import analyze_jd_schema as _ollama_schema_fn
+    from eval.corpus import build_pairs
+    from rho.jd.groq import analyze_jd_schema_groq
     from rho.matching import match
 
-    pairs = []
-    for i, (resume, jd_text) in enumerate(
-        build_pairs(n_pairs=n_pairs, seed=seed, resume_csv=resume_csv, jd_csv=jd_csv)
-    ):
-        reqs = analyze_jd(jd_text, _schema_fn=_ollama_schema_fn)
-        result = match(resume, reqs)
-        gaps = [g for g in result.gaps if g.status != "present"]
-        pairs.append(
-            {
-                "id": f"corpus-{seed}-{i}",
-                "resume": resume,
-                "prov": _prov_for(resume, i),
-                "jd": jd_text,
-                "gaps": gaps,
-                "tempting_absent": [g.requirement.text for g in gaps],
-            }
-        )
-    return pairs
+    raw_pairs = build_pairs(
+        n_pairs=n_pairs, seed=seed, resume_csv=resume_csv, jd_csv=jd_csv
+    )
+
+    def _build(indexed):
+        i, (resume, jd_text) = indexed
+        try:
+            reqs = analyze_jd_schema_groq(jd_text)
+        except Exception:
+            # A JD that will not parse yields no gaps rather than killing the run;
+            # the pair still exercises the gate, just without targeted pressure.
+            return None
+        gaps = [g for g in match(resume, reqs).gaps if g.status != "present"]
+        return {
+            "id": f"corpus-{seed}-{i}",
+            "resume": resume,
+            "prov": _prov_for(resume, i),
+            "jd": jd_text,
+            "gaps": gaps,
+            "tempting_absent": [g.requirement.text for g in gaps],
+        }
+
+    # JD analysis is a network round-trip per pair; keys round-robin underneath.
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        built = list(pool.map(_build, enumerate(raw_pairs)))
+    return [p for p in built if p is not None]
 
 
 def _prov_for(resume: StructuredResume, idx: int) -> ProvenanceMap:

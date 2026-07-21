@@ -117,6 +117,11 @@ def build_corpus_pairs(
             f"  WARNING: {len(failures)}/{len(raw_pairs)} pairs dropped during JD "
             f"analysis. First: {failures[0][:160]}"
         )
+    if not kept:
+        raise RuntimeError(
+            f"JD analysis failed for all {len(raw_pairs)} pairs — benchmark is "
+            f"empty, not clean. First failure: {failures[0][:200] if failures else 'n/a'}"
+        )
     return kept
 
 

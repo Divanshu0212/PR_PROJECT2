@@ -208,9 +208,11 @@ class GroqClient:
             "reasoning_format": "hidden",
         }
         if self.budget is not None:
-            # Charge prompt + expected completion so the pacer is not surprised
-            # by the model's own output.
-            wait = self.budget.acquire(estimate_tokens(prompt) + 600)
+            # Charge what Groq actually reserves at admission: the prompt plus the
+            # FULL `max_tokens`, not an estimate of the likely completion. Charging
+            # less lets the pacer admit roughly twice the account's allowance, and
+            # the surplus comes back as 429s.
+            wait = self.budget.acquire(estimate_tokens(prompt) + self.max_tokens)
             if wait > 0:
                 time.sleep(wait)
 

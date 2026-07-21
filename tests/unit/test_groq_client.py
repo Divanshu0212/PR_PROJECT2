@@ -238,3 +238,21 @@ def test_rate_limited_key_falls_through_to_next_before_sleeping():
         mod.time.sleep = original
     assert calls == ["Bearer k1", "Bearer k2"]  # tried the next key
     assert slept == []  # and did not sleep 70s to do it
+
+
+def test_budget_charges_reserved_max_tokens_not_expected_output():
+    """Groq reserves max_tokens at admission; charging less over-admits."""
+    from rho.llm.groq import TokenBudget
+
+    clock = [0.0]
+    budget = TokenBudget(tokens_per_minute=8000, now=lambda: clock[0])
+
+    def ok(url, headers, payload, timeout):
+        return json.dumps({"choices": [{"message": {"content": "{}"}}]})
+
+    client = GroqClient(
+        api_keys=["k"], transport=ok, budget=budget, max_tokens=1500
+    )
+    client.complete_json("x" * 4000)  # ~1000 prompt tokens
+    charged = sum(n for _, n in budget._spent)
+    assert charged >= 1500, f"reserved max_tokens not charged (got {charged})"

@@ -166,6 +166,13 @@ def run(
         "mean_fabrication_rate": mean_rate,
         "per_pair": per_pair,
     }
+    if not scored:
+        # "gate-OFF=0 over 0 pairs" is not a result — it is the shape a totally
+        # failed run takes, and it reads like a clean one. Never let it pass.
+        raise RuntimeError(
+            f"no pairs scored ({len(per_pair)} attempted, all failed). "
+            "The ablation produced no data; do not report these numbers."
+        )
     print(
         f"\nunsourced additions shipped  gate-OFF={off_total}  gate-ON={on_total}"
         f"\nmean fabrication_rate = {mean_rate:.3f}  over {len(rates)} pairs"

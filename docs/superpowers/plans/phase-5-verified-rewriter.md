@@ -312,17 +312,44 @@ git add -A && git commit -m "feat: fabrication benchmark + gate ablation (C3)"
 
 ## Results (the C3 numbers the paper needs)
 
+### Headline — `qwen2.5:14b` on corpus-backed pairs (the number to cite)
+
+- **Rewriter:** `qwen2.5:14b` via Ollama, temperature 0.6, JSON-schema-constrained decoding
+  (Ollama `format`), CPU-only. Artifact: `eval/fabrication_results_corpus.json`.
+- **Benchmark:** 30 corpus-backed pairs (`eval/fabrication_corpus.py`, seed 0) — real résumés from
+  `Resume.csv` with populated work history, bullets, and education, each paired with a JD from
+  `training_data.csv`. Gaps come from the real Phase-3 path (`analyze_jd` → `match`), not a
+  hand-written "tempting" list, so the pressure on the rewriter is whatever the JD actually demands
+  and the résumé actually lacks. Provenance is rebuilt over the résumé's own values via `ingest()`,
+  so spans are production-shaped. 30 scored, 0 failed.
+- **Unsourced additions shipped: gate-OFF 31 vs gate-ON 0** ← headline C3.
+  Gate-ON is 0 **by construction** — that is the claim, and it held on every one of the 30 pairs.
+  The guarantee is structural, not a model behaviour that happened to hold on this sample.
+- **Mean fabrication_rate (gate detects): 0.407** across the 30 pairs.
+  **14 of 30 pairs** carried at least one fabrication; the worst single pair shipped **7**.
+- **These are real fabrications, not paraphrases** (the bullet-gate false-positive class is fixed —
+  see deviation 3b). Rejected-and-reverted examples: invented skills (`Microsoft Access`,
+  `Microsoft Outlook`), invented experience (`Led the development of a private banking group focused
+  on Act 20 and Act 22 clients`, `Operated standard office equipment such as 10-key calculator for
+  cash handling`), and even a leaked prompt-reasoning artifact
+  (`>// Emphasize content creation as it's closest to the target requirements…`). None reached output.
+
+### Earlier run — `gemma3:4b` on the 12-pair synthetic fixture (retained for comparison)
+
 - **Fabrication benchmark size:** 12 adversarial pairs (`tests/fixtures/fabrication/pairs.json`).
   Each is a résumé whose JD demands skills the résumé does not have — 61 absent requirements in
   total. Provenance is built by running the real `ingest()` path over the résumé text, so the gate
   sees production-shaped spans, not a hand-written map.
-- **Unsourced additions shipped: gate-OFF 15 vs gate-ON 0** ← headline C3 (no-gaps condition)
+- **Unsourced additions shipped: gate-OFF 15 vs gate-ON 0** (no-gaps condition)
   Adversarial condition (gap list in the prompt): **gate-OFF 3 vs gate-ON 0**.
-  Gate-ON is 0 in both conditions **by construction** — that is the claim. The guarantee is
-  structural, not a model behaviour that happened to hold on this sample.
+  Gate-ON is 0 in both conditions **by construction**.
 - **Mean fabrication_rate (gate detects):** 0.562 without gaps in the prompt, 0.083 with them.
 - **Rewriter:** `gemma3:4b` via Ollama, temperature 0.6, JSON-schema-constrained decoding.
   Artifacts: `eval/fabrication_results.json` (gaps), `eval/fabrication_results_nogaps.json`.
+  **Caveat:** these `gemma3:4b` counts predate the bullet-gate fix (deviation 3b) and may include
+  rephrasings wrongly counted as fabrications on any bullet-derived rejection; the structured-field
+  rejections (invented employers/titles/universities) are unaffected. The `qwen2.5:14b` corpus
+  numbers above are post-fix and are the ones to cite.
 
 ### What the gate actually caught
 Rejections are not near-miss paraphrases — they are whole invented facts. Across the no-gaps run
@@ -348,9 +375,14 @@ than a guarantee. The gate reached 0 in both conditions because it cannot do oth
 
 ### Deviations from the plan (each deliberate, with a reason)
 
-0. **Groq `qwen/qwen3.6-27b` is the current rewriter; Ollama `gemma3:4b` is the earlier one.**
-   The numbers above under "gemma3:4b" are retained for comparison — see the Groq section below for
-   the current headline. Three things the Groq path forced, each verified rather than assumed:
+0. **The cited rewriter is `qwen2.5:14b` via Ollama; `gemma3:4b` is the earlier fixture run.**
+   A Groq `qwen/qwen3.6-27b` backend was built and fully debugged (`rho.llm.groq`,
+   `rho.jd.groq`, `rho.rewrite.groq`) but **never produced the headline numbers** — the free tier's
+   daily token pool (TPD 200000, shared across all keys) was exhausted before a clean 30-pair run
+   completed, so no Groq fabrication figure is reported. The pipeline was therefore run on local
+   `qwen2.5:14b` (no quota, real constrained decoding via Ollama's `format`, a real named model).
+   The Groq findings below are retained because they document the backend's behaviour and the
+   reasons it was set aside, not because any result depends on them:
    - **Cloudflare rejects `urllib`.** Requests via `urllib.request` return `403 / error code: 1010`
      *before* Groq evaluates the key — a bogus key and a valid key fail identically, which is how
      the cause was isolated. `httpx` and `curl` pass, so `httpx` moved from a dev extra to a runtime
@@ -414,17 +446,17 @@ than a guarantee. The gate reached 0 in both conditions because it cannot do oth
 6. **`rewrite()` takes `prov`** — recorded in shared-context Section 6. P6 must pass it.
 
 ### Limitations
-- 12 pairs is small, and they are synthetic résumés written for this benchmark rather than sampled
-  from the corpus. The gate-ON=0 result does not depend on sample size (it is structural), but the
-  gate-OFF rate does — treat 15/24 as an illustration of fabrication pressure, not a population
-  estimate.
+- 30 corpus pairs is still a modest sample. The gate-ON=0 result does not depend on sample size
+  (it is structural — it held on all 30), but the gate-OFF count and the 0.407 fabrication_rate do:
+  treat **31 over 30 pairs** and **14/30 pairs affected** as an illustration of fabrication pressure
+  under this model, not a population estimate.
 - **The curated 12-pair fixture no longer discriminates on a strong model.** Those résumés carry
   skills only — no work history, no bullets — so the gate's work/bullet/education paths were never
-  exercised by real generated text. On `qwen/qwen3.6-27b` the fixture yields **0 edits attempted and
-  0 fabrications**, i.e. it measures nothing. Corpus-backed pairs
-  (`eval/fabrication_corpus.py`, résumés with populated work history and JD-derived gaps) are the
-  benchmark that still has signal, and are what the Groq numbers below are drawn from.
-- One rewriter model at one temperature. The gate-OFF number is a property of `gemma3:4b`, not of
-  grounded prompting in general.
+  exercised by real generated text. Corpus-backed pairs (`eval/fabrication_corpus.py`, résumés with
+  populated work history and JD-derived gaps) are the benchmark that still has signal, and are what
+  the `qwen2.5:14b` headline numbers are drawn from.
+- One rewriter model at one temperature. The gate-OFF count is a property of `qwen2.5:14b` at
+  temperature 0.6, not of grounded prompting in general. (An earlier `gemma3:4b` fixture run is
+  retained above for comparison only.)
 - The gate verifies *provenance*, not *semantics*: a value copied from an unrelated part of the
   source document passes. It stops invention, not misattribution.

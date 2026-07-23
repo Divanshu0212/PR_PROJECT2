@@ -47,12 +47,26 @@ def corpus_prov(text: str, doc_id: str) -> ProvenanceMap:
     return prov
 
 
+def _jd_analyzer(backend: str):
+    """Resolve the JD-analysis function for `backend` ("ollama" or "groq")."""
+    if backend == "groq":
+        from rho.jd.groq import analyze_jd_schema_groq
+
+        return analyze_jd_schema_groq
+    # Ollama path: reuse the frozen analyze_jd contract with the Ollama schema fn.
+    from rho.jd import analyze_jd
+    from rho.jd.ollama import analyze_jd_schema as _ollama_schema_fn
+
+    return lambda jd: analyze_jd(jd, _schema_fn=_ollama_schema_fn)
+
+
 def build_corpus_pairs(
     n_pairs: int = 30,
     seed: int = 0,
     resume_csv: str = "Resume.csv",
     jd_csv: str = "training_data.csv",
     workers: int = 5,
+    backend: str = "ollama",
 ) -> list[dict]:
     """Corpus résumé × JD pairs shaped for `eval.fabrication_ablation.run`.
 
@@ -63,8 +77,11 @@ def build_corpus_pairs(
     from concurrent.futures import ThreadPoolExecutor
 
     from eval.corpus import build_pairs
-    from rho.jd.groq import analyze_jd_schema_groq
     from rho.matching import match
+
+    analyze = _jd_analyzer(backend)
+    # Ollama runs one CPU model; concurrent calls thrash. Groq is network-bound.
+    jd_workers = workers if backend == "groq" else 1
 
     raw_pairs = [
         (_trim(resume), jd_text)
@@ -76,14 +93,10 @@ def build_corpus_pairs(
     failures: list[str] = []
 
     def _analyze(indexed):
-        """Network-bound half: safe to run concurrently."""
-        from rho.llm.groq import QuotaExhausted
-
+        """Run JD analysis for one pair (backend chosen above)."""
         i, (_, jd_text) = indexed
         try:
-            return i, analyze_jd_schema_groq(jd_text)
-        except QuotaExhausted:
-            raise  # no point analysing the rest; the day's budget is gone
+            return i, analyze(jd_text)
         except Exception as exc:
             # Never drop silently: a swallowed 429 would shrink the benchmark
             # without saying so, which reads as a clean run on fewer pairs.
@@ -92,7 +105,7 @@ def build_corpus_pairs(
 
     # Phase 1 — JD analysis is a network round-trip per pair; keys round-robin
     # underneath and `TokenBudget` paces the account-wide TPM cap.
-    with ThreadPoolExecutor(max_workers=workers) as pool:
+    with ThreadPoolExecutor(max_workers=jd_workers) as pool:
         analyzed = dict(pool.map(_analyze, enumerate(raw_pairs)))
 
     # Phase 2 — `match()` runs sentence-transformers on CPU. Torch spawns its own

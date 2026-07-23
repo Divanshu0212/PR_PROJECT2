@@ -184,7 +184,7 @@ def run(
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None)
-    ap.add_argument("--backend", default="groq", choices=["groq", "ollama"])
+    ap.add_argument("--backend", default="ollama", choices=["groq", "ollama"])
     ap.add_argument("--workers", type=int, default=5)
     ap.add_argument(
         "--corpus",
@@ -203,7 +203,10 @@ def main() -> None:
 
         print(f"building {args.corpus} corpus pairs (JD analysis via LLM)...")
         pairs = build_corpus_pairs(
-            n_pairs=args.corpus, seed=args.seed, workers=args.workers
+            n_pairs=args.corpus,
+            seed=args.seed,
+            workers=args.workers,
+            backend=args.backend,
         )
     else:
         pairs = load_pairs()

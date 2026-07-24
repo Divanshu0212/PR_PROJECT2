@@ -16,6 +16,7 @@ dependencies = [
     "scikit-learn>=1.4",
     "scipy>=1.11",
     "joblib",
+    "langgraph>=0.2",
     # Groq backend transport: Cloudflare rejects urllib's fingerprint with
     # 403/1010 before the request reaches Groq, so httpx is a runtime need.
     "httpx>=0.27",

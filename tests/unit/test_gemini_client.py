@@ -157,6 +157,111 @@ def test_rate_limit_wait_is_capped():
     assert all(s <= 71 for s in slept)
 
 
+def test_is_daily_quota_detects_real_free_tier_body():
+    """Regression: Google's daily-quota 429 DOES carry a RetryInfo detail (a
+    bogus short delay — the quota resets once a day, not in 30s), so presence
+    of RetryInfo cannot be used to rule out a daily quota. This is the actual
+    body observed from gemini-3.6-flash's free tier."""
+    from rho.llm.gemini import _is_daily_quota
+
+    real_body = {
+        "error": {
+            "code": 429,
+            "message": "You exceeded your current quota...",
+            "status": "RESOURCE_EXHAUSTED",
+            "details": [
+                {"@type": "type.googleapis.com/google.rpc.Help", "links": []},
+                {
+                    "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                    "violations": [
+                        {
+                            "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+                            "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                            "quotaDimensions": {"model": "gemini-3.6-flash"},
+                            "quotaValue": "20",
+                        }
+                    ],
+                },
+                {
+                    "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                    "retryDelay": "34s",
+                },
+            ],
+        }
+    }
+    assert _is_daily_quota(real_body) is True
+
+
+def test_is_daily_quota_false_for_per_minute_limit():
+    from rho.llm.gemini import _is_daily_quota
+
+    per_minute_body = {
+        "error": {
+            "code": 429,
+            "status": "RESOURCE_EXHAUSTED",
+            "details": [
+                {
+                    "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                    "violations": [
+                        {
+                            "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests_per_minute",
+                            "quotaId": "GenerateRequestsPerMinutePerProjectPerModel-FreeTier",
+                            "quotaValue": "10",
+                        }
+                    ],
+                },
+                {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "5s"},
+            ],
+        }
+    }
+    assert _is_daily_quota(per_minute_body) is False
+
+
+def test_transport_raises_quota_exhausted_on_daily_quota_body():
+    from rho.llm.gemini import _httpx_transport
+
+    class FakeResponse:
+        def __init__(self, body):
+            self.status_code = 429
+            self.content = json.dumps(body).encode()
+            self.headers = {}
+
+        def json(self):
+            return json.loads(self.content)
+
+    real_body = {
+        "error": {
+            "status": "RESOURCE_EXHAUSTED",
+            "details": [
+                {
+                    "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                    "violations": [
+                        {
+                            "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                            "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+                        }
+                    ],
+                },
+                {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "34s"},
+            ],
+        }
+    }
+
+    import types
+
+    fake_httpx = types.SimpleNamespace(post=lambda *a, **k: FakeResponse(real_body))
+    import sys
+
+    saved = sys.modules.get("httpx")
+    sys.modules["httpx"] = fake_httpx
+    try:
+        with pytest.raises(QuotaExhausted):
+            _httpx_transport("u", {}, 10)
+    finally:
+        if saved is not None:
+            sys.modules["httpx"] = saved
+
+
 def test_daily_quota_exhaustion_moves_to_next_key_not_retried():
     """Unlike Groq's shared TPD, Gemini quota is per-key/per-project: rotate off
     the exhausted key rather than aborting the whole call."""

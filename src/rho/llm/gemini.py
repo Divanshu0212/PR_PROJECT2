@@ -1,8 +1,19 @@
-"""Gemini backend (`gemini-3.6-flash`) for JD analysis, extraction, and rewrite.
+"""Gemini backend (`gemini-3.1-flash-lite`) for JD analysis, extraction, and rewrite.
 
 Same role as `rho.llm.groq`: a thread-safe round-robin client over several
 free-tier API keys, used as a drop-in alternate backend behind the frozen
 `analyze_jd`/`extract`/`rewrite` contracts.
+
+**Model choice, and why it changed.** `gemini-3.6-flash` was tried first (the
+model the user asked for) but its free tier is
+`GenerateRequestsPerDayPerProjectPerModel-FreeTier` = **20 requests per day**,
+confirmed from the live 429 body — not a per-minute limit pacing can smooth
+over. A 199-pair calibrator run alone needs ~199 requests; the daily cap made
+it structurally unrunnable regardless of key count or backoff. `gemini-2.0-flash`
+and `gemini-2.5-flash`/`-lite` were tried next: the 2.5 family 404s as
+"no longer available to new users", and 2.0-flash hit its own 429 quickly.
+`gemini-3.1-flash-lite` is the model that actually sustains this workload's
+call volume on a free-tier key.
 
 Three things about this model and endpoint shape the client:
 
@@ -33,7 +44,7 @@ import re
 import threading
 import time
 
-MODEL = "gemini-3.6-flash"
+MODEL = "gemini-3.1-flash-lite"
 _ENDPOINT_TMPL = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
@@ -117,6 +128,26 @@ def _parse_retry_after(body: dict, headers) -> float:
     return 5.0
 
 
+def _is_daily_quota(body: dict) -> bool:
+    """True when the 429's QuotaFailure names a per-day quota.
+
+    Google's daily-quota 429 still carries a `RetryInfo` detail (a short delay
+    that does NOT actually help — the quota resets once a day, not in 30s), so
+    presence/absence of `RetryInfo` cannot distinguish it from a real
+    per-minute limit. The `quotaId`/`quotaMetric` naming ("...PerDay...") is
+    the only reliable signal; confirmed against a live 429 body from
+    `gemini-3.6-flash`'s free tier (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`).
+    """
+    for detail in body.get("error", {}).get("details", []):
+        if not detail.get("@type", "").endswith("QuotaFailure"):
+            continue
+        for violation in detail.get("violations", []):
+            names = violation.get("quotaId", "") + violation.get("quotaMetric", "")
+            if "PerDay" in names or "per_day" in names:
+                return True
+    return False
+
+
 def _httpx_transport(url: str, payload: dict, timeout: int) -> tuple[dict, dict]:
     import httpx
 
@@ -126,11 +157,7 @@ def _httpx_transport(url: str, payload: dict, timeout: int) -> tuple[dict, dict]
     if response.status_code == 429:
         body = response.json() if response.content else {}
         message = json.dumps(body)[:300]
-        if any(
-            kw in message for kw in ("PerDay", "per day", "daily", "RESOURCE_EXHAUSTED")
-        ) and "RetryInfo" not in message:
-            # RESOURCE_EXHAUSTED without a RetryInfo detail is the daily-quota
-            # shape; a per-minute 429 always carries a short RetryInfo delay.
+        if _is_daily_quota(body):
             raise QuotaExhausted(f"Gemini daily quota exhausted: {message}")
         raise RateLimited(_parse_retry_after(body, response.headers), f"429: {message}")
     response.raise_for_status()

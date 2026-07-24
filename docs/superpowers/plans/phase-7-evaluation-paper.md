@@ -42,7 +42,7 @@
 **Interfaces:**
 - Produces: `field_f1(pred: dict, gold: dict, field: str) -> dict` returning `{precision, recall, f1}` for a list-valued field via set/aligned comparison; `long_text_f1(pred: str, gold: str) -> float` (token-overlap F1); `provenance_accuracy(resume, gold_prov_map) -> float` (fraction of fields whose attached `prov_id` points to the correct source span).
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 ```python
 # tests/unit/test_metrics.py
 from eval.metrics import field_f1, long_text_f1
@@ -55,10 +55,10 @@ def test_long_text_f1_token_overlap():
     assert 0.0 < f < 1.0
 ```
 
-- [ ] **Step 2: Run to verify fail** → FAIL.
+- [x] **Step 2: Run to verify fail** → FAIL.
 Run: `pytest tests/unit/test_metrics.py -v`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 ```python
 # eval/metrics.py
 def _prf(pred_set, gold_set):
@@ -83,9 +83,9 @@ def provenance_accuracy(resume, gold_prov: dict) -> float:
 ```
 *(Task note: finalize `provenance_accuracy` against the exact gold-span format you choose in Task 2. Keep it deterministic and unit-test it once the format exists.)*
 
-- [ ] **Step 4: Run to verify pass** → PASS.
+- [x] **Step 4: Run to verify pass** → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add -A && git commit -m "feat: evaluation metrics (field F1, long-text F1)"
 ```
@@ -101,15 +101,15 @@ git add -A && git commit -m "feat: evaluation metrics (field F1, long-text F1)"
 **Interfaces:**
 - Produces: loaders `load_gold() -> list[(file_path, gold_json)]`, `load_calibration_pairs() -> list[(file_bytes, filename, jd_text)]`, `load_fabrication_pairs() -> list[(resume, gaps, prov)]`.
 
-- [ ] **Step 1: Assemble gold extraction set** (100–300 résumés across formats; hand-label fields + provenance spans). Sources per report §1.4: Kaggle Resume NER set, HF `yashpwr/resume-ner-training-data`, LiveCareer/Jiechieu; or synthetic (template + substituted content). Store `gold/<id>.pdf` + `gold/<id>.json` (fields + gold prov spans).
+- [x] **Step 1: Assemble gold extraction set** (100–300 résumés across formats; hand-label fields + provenance spans). Sources per report §1.4: Kaggle Resume NER set, HF `yashpwr/resume-ner-training-data`, LiveCareer/Jiechieu; or synthetic (template + substituted content). Store `gold/<id>.pdf` + `gold/<id>.json` (fields + gold prov spans).
 
-- [ ] **Step 2: Assemble calibration pairs** (résumé × JD pairs to run through the ATS harness, P4). Reuse gold résumés × a set of JDs.
+- [x] **Step 2: Assemble calibration pairs** (résumé × JD pairs to run through the ATS harness, P4). Reuse gold résumés × a set of JDs.
 
-- [ ] **Step 3: Assemble fabrication benchmark** (from P5 Task 5; move canonical copy here).
+- [x] **Step 3: Assemble fabrication benchmark** (from P5 Task 5; move canonical copy here).
 
-- [ ] **Step 4: Write loaders** — deterministic, path-based, return the shapes above.
+- [x] **Step 4: Write loaders** — deterministic, path-based, return the shapes above.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add -A && git commit -m "data: gold/calibration/fabrication datasets + loaders"
 ```
@@ -130,7 +130,7 @@ git add -A && git commit -m "data: gold/calibration/fabrication datasets + loade
   - **Table 4 (ablations):** provenance on/off, calibrated vs cosine, gate on/off — one row each.
   - Latency + cost-per-successful-task line.
 
-- [ ] **Step 1: Implement runner**
+- [x] **Step 1: Implement runner**
 ```python
 # eval/run_all.py
 import json
@@ -162,10 +162,10 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 2: Run on real datasets** (needs LLM + calibrator fitted). Record numbers.
+- [x] **Step 2: Run on real datasets** (needs LLM + calibrator fitted). Record numbers.
 Run: `RHO_LLM_ENABLED=1 python eval/run_all.py`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 ```bash
 git add -A && git commit -m "feat: run_all eval harness -> RESULTS.md"
 ```
@@ -180,9 +180,9 @@ git add -A && git commit -m "feat: run_all eval harness -> RESULTS.md"
 **Interfaces:**
 - Produces: Table 4 rows — (A) fabrication rate with provenance chain vs a no-provenance rewrite; (B) calibrated vs cosine MAE (reuse P4); (C) gate on/off shipped-unsourced (reuse P5). Each ablation toggles exactly one component.
 
-- [ ] **Step 1: Implement** the three ablation calls, writing rows into `RESULTS.md`.
-- [ ] **Step 2: Run + record.**
-- [ ] **Step 3: Commit**
+- [x] **Step 1: Implement** the three ablation calls, writing rows into `RESULTS.md`.
+- [x] **Step 2: Run + record.**
+- [x] **Step 3: Commit**
 ```bash
 git add -A && git commit -m "feat: ablation runner (provenance/calibration/gate)"
 ```
@@ -190,16 +190,81 @@ git add -A && git commit -m "feat: ablation runner (provenance/calibration/gate)
 ---
 
 ## Self-Review
-- [ ] Metric functions unit-tested.
-- [ ] All three datasets assembled + loadable.
-- [ ] `run_all.py` writes Tables 1–4 + latency/cost to `RESULTS.md`.
-- [ ] Long-text fields reported separately from named entities.
-- [ ] Every headline number reproducible from an `eval/` script.
+- [x] Metric functions unit-tested.
+- [x] All three datasets assembled + loadable.
+- [x] `run_all.py` writes Tables 1–4 + latency/cost to `RESULTS.md`.
+- [x] Long-text fields reported separately from named entities.
+- [x] Every headline number reproducible from an `eval/` script.
 
-## Results (fill in — final paper numbers)
-- **C1:** mean field F1 ___, long-text F1 ___, provenance-attachment accuracy ___
-- **C2:** calibrated MAE ___ / Spearman ___ vs cosine MAE ___
-- **C3:** unsourced shipped gate-OFF ___ vs gate-ON ___ ; mean fabrication_rate ___
-- **Ablations:** provenance on/off ___ ; calibrated/cosine ___ ; gate on/off ___
-- Latency: ___ ; cost-per-successful-task: ___
-- Dataset sizes: gold ___ / calibration ___ / fabrication ___
+## Results
+
+**This is the first-ever run of this harness** — `eval/run_all.py` existed with full Table 1/2/3/4
+logic from earlier work in this repo, but had never actually been executed end-to-end before this
+session; no qwen Table-1 baseline exists to compare against. This run is entirely on
+`gemini-3.1-flash-lite`: `python -m eval.run_all --extraction-backend gemini --suffix _gemini`.
+Full numbers in `eval/RESULTS.md`; per-résumé rows in `eval/results_table1{a,b,c}_*.csv`.
+
+- **C1 (headline, Table 1c — public human-annotated gold, n=143/150 scored):**
+  skills F1 **0.753** (precision 0.802 / recall 0.749), job title F1 **0.935**,
+  institution F1 **0.917**, certification F1 **0.802**,
+  **provenance-attachment accuracy: 0.874**.
+  - Table 1a (synthetic, upper bound, n=120/120): skills/work/education F1 ≈ **1.00**,
+    long-text (summary) F1 **1.00**, provenance-attachment accuracy 0.894 — confirms the pipeline
+    is correct when labels are unambiguous; the gap down to 1c's 0.753 skills F1 is real-world
+    résumé messiness, not a pipeline defect.
+  - Table 1b (real corpus, reality check, n=25/30): skills F1 0.443 (noisier, unverified labels —
+    1c is the trustworthy real-data number), job title F1 0.931, long-text F1 0.979.
+  - **7/150 (1c) + 5/30 (1b) = 12/300 docs failed extraction outright**, not merely scored low.
+    See "Gemini extraction reliability" below — this is a genuine, reproducible finding, not
+    noise to average away.
+
+- **C2:** calibrated MAE **3.25** / Spearman ρ **0.333** vs cosine-baseline MAE 27.58 / ρ 0.229.
+  199/199 pairs usable (0 skipped, vs qwen's 1/200 dropped). **47x faster wall-clock** than the
+  qwen path (836s vs 39,162s) for statistically equivalent calibration quality (this doc's own
+  qwen run showed ρ varying 0.328–0.440 between runs on the same pipeline, so a few points of ρ
+  here is noise, not a backend difference). Full comparison: Phase 4's Results section.
+
+- **C3:** unsourced shipped **gate-OFF 40 vs gate-ON 0** (qwen: 31 vs 0). 30/30 pairs scored,
+  0 failed. Mean `fabrication_rate` (gate detections) **0.248**. Gate-ON is 0 on both backends —
+  the guarantee is structural, holds regardless of which model drives the rewriter. Full
+  comparison: Phase 5's Results section.
+
+- **Ablations (Table 4):**
+  - **A — provenance chain:** the span-resolved gate rejected 40 fabrications; a naive
+    source-text-substring check would have caught 36 of those on its own, but **4 fabrications
+    would have shipped** under the substring-only approach and were only caught because the gate
+    resolves to an actual provenance span, not "does this text appear somewhere in the source."
+    10/30 pairs carried ≥1 fabrication.
+  - **B — scoring:** calibrated (3.25 MAE / 0.333 ρ) beats cosine (27.58 MAE / 0.229 ρ) — same
+    conclusion as qwen, calibration adds real signal beyond raw similarity.
+  - **C — rewrite gate:** OFF ships 40 unsourced additions, ON ships 0. Confirms C3 is a property
+    of the gate, not of the rewriter's honesty.
+
+- **Latency:** extraction median **3.4s** per résumé (n=288, min 1.8s, max 19.4s) — two orders of
+  magnitude faster than qwen's CPU-bound Ollama path (~75s/pair, Phase 4).
+- **Cost-per-successful-task: $0.00**, but with a caveat the qwen path doesn't have: Gemini is a
+  **hosted commercial API**. This run stayed inside the free tier's daily quota; it is not free
+  because the design has no billing surface. Scaling this run up would need either a paid tier or
+  spreading calls across more free-tier accounts. Contrast with Ollama/vLLM (Phases 4–6): genuinely
+  $0 at any scale, since it's self-hosted compute.
+- **Dataset sizes:** gold 300 total (120 synthetic + 30 real + 150 public), **288 scored / 12
+  failed**; calibration 199 pairs; fabrication 30 pairs.
+
+### Gemini extraction reliability — a genuine, reproducible finding
+
+12/300 documents (4%) failed extraction outright, not merely scored poorly. Every failure has the
+**same root cause**, confirmed via direct reproduction and via two independent full runs producing
+**identical failures on the identical documents**: `gemini-3.1-flash-lite` enters a degenerate
+repetition loop when a résumé's dates are formatted ambiguously across multiple lines (e.g.
+`"03/2015\nto\n07/2017"`), repeating a malformed ISO-timestamp fragment
+(`"2015-03-01T00:00:00Z03/2015-03-01T00:00:00Z03/2015-03-01T00:00:00Z..."`) until hitting
+`maxOutputTokens` (4096), at which point `finishReason: MAX_TOKENS` truncates the response mid-string
+and the JSON is unparseable. This is the same underlying tendency Phase 6 found in miniature
+(over-formatting a plain `"2020"` into `"2020-01-01T00:00:00Z"`) — here it spirals into infinite
+repetition instead of stopping after one bad value. It is a property of this model on this task,
+not a pacing/quota/backend-plumbing issue: temperature is 0, so the failure is deterministic, and
+it reproduced on the exact same document IDs across two separate full 300-document runs.
+Two engineering bugs were found and fixed while diagnosing this (both committed, both with tests):
+a 403-`PERMISSION_DENIED` key was being retried every rotation instead of rotated out permanently,
+and the table-1 evaluation loops had no per-document error handling, so one bad résumé used to kill
+the whole run rather than being recorded and skipped.

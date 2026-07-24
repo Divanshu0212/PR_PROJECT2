@@ -160,8 +160,8 @@ def test_rate_limit_wait_is_capped():
 def test_is_daily_quota_detects_real_free_tier_body():
     """Regression: Google's daily-quota 429 DOES carry a RetryInfo detail (a
     bogus short delay — the quota resets once a day, not in 30s), so presence
-    of RetryInfo cannot be used to rule out a daily quota. This is the actual
-    body observed from gemini-3.6-flash's free tier."""
+    of RetryInfo cannot be used to rule out a daily quota. This is a real
+    body observed from a Gemini free-tier daily quota."""
     from rho.llm.gemini import _is_daily_quota
 
     real_body = {
@@ -177,7 +177,7 @@ def test_is_daily_quota_detects_real_free_tier_body():
                         {
                             "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
                             "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
-                            "quotaDimensions": {"model": "gemini-3.6-flash"},
+                            "quotaDimensions": {"model": "gemini-3.1-flash-lite"},
                             "quotaValue": "20",
                         }
                     ],

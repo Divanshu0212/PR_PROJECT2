@@ -1,4 +1,4 @@
-"""Gemini-backed grounded rewriting (`gemini-3.6-flash`).
+"""Gemini-backed grounded rewriting (`gemini-3.1-flash-lite`).
 
 Same grounded prompt as `rho.rewrite.llm`/`rho.rewrite.groq`, same temperature
 (0.6), different backend — via Gemini's `responseSchema` constrained decoding.

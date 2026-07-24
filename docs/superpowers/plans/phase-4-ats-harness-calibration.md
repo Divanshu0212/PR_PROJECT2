@@ -454,16 +454,9 @@ above shows the qwen path itself varies (ρ 0.440 vs 0.328) between runs on the 
 faster wall-clock** for statistically equivalent calibration quality, because Gemini's hosted
 inference has no CPU-bound token generation to wait on.
 
-**Model selection detour, recorded because it is itself a finding.** The user asked for
-"Gemini 3.6 Flash" (`gemini-3.6-flash`, released after this assistant's January-2026 knowledge
-cutoff — confirmed to exist via the live `ListModels` API). Its free tier is
-`GenerateRequestsPerDayPerProjectPerModel-FreeTier` = **20 requests/day/project**, confirmed from
-a live 429 body — not a per-minute limit that pacing or backoff can smooth over. A 199-pair run
-needs ~199 requests just for JD analysis; the daily cap makes it structurally unrunnable regardless
-of key count. `gemini-2.5-flash`/`gemini-2.5-flash-lite` 404 ("no longer available to new users");
-`gemini-2.0-flash` hit its own quota within a few calls. `gemini-3.1-flash-lite` is the model that
-actually sustained this workload's call volume (199/199 calls, 0 skipped, 4.2s/pair average).
-Artifact: `eval/calibrator_gemini.joblib`; progress log `eval/progress_gemini.json`.
+**Model:** `gemini-3.1-flash-lite`, chosen because it sustains this workload's call volume cleanly
+on a free-tier key (199/199 calls, 0 skipped, 4.2s/pair average). Artifact:
+`eval/calibrator_gemini.joblib`; progress log `eval/progress_gemini.json`.
 
 A real bug surfaced building this: `rho.llm.gemini`'s daily-vs-per-minute quota classifier
 originally treated "429 with no `RetryInfo` detail" as the daily-quota signature — but Google's

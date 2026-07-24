@@ -1,4 +1,4 @@
-"""Gemini-backed résumé extraction (`gemini-3.6-flash`).
+"""Gemini-backed résumé extraction (`gemini-3.1-flash-lite`).
 
 Same contract as `rho.extraction.ollama`, but via Gemini's `responseSchema`
 constrained decoding rather than Ollama's `format` parameter.

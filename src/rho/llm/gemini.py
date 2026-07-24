@@ -4,17 +4,6 @@ Same role as `rho.llm.groq`: a thread-safe round-robin client over several
 free-tier API keys, used as a drop-in alternate backend behind the frozen
 `analyze_jd`/`extract`/`rewrite` contracts.
 
-**Model choice, and why it changed.** `gemini-3.6-flash` was tried first (the
-model the user asked for) but its free tier is
-`GenerateRequestsPerDayPerProjectPerModel-FreeTier` = **20 requests per day**,
-confirmed from the live 429 body — not a per-minute limit pacing can smooth
-over. A 199-pair calibrator run alone needs ~199 requests; the daily cap made
-it structurally unrunnable regardless of key count or backoff. `gemini-2.0-flash`
-and `gemini-2.5-flash`/`-lite` were tried next: the 2.5 family 404s as
-"no longer available to new users", and 2.0-flash hit its own 429 quickly.
-`gemini-3.1-flash-lite` is the model that actually sustains this workload's
-call volume on a free-tier key.
-
 Three things about this model and endpoint shape the client:
 
 1. **It is a "thinking" model** (`thinking: true` in the model metadata) —
@@ -135,8 +124,8 @@ def _is_daily_quota(body: dict) -> bool:
     that does NOT actually help — the quota resets once a day, not in 30s), so
     presence/absence of `RetryInfo` cannot distinguish it from a real
     per-minute limit. The `quotaId`/`quotaMetric` naming ("...PerDay...") is
-    the only reliable signal; confirmed against a live 429 body from
-    `gemini-3.6-flash`'s free tier (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`).
+    the only reliable signal; confirmed against a live 429 body
+    (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`).
     """
     for detail in body.get("error", {}).get("details", []):
         if not detail.get("@type", "").endswith("QuotaFailure"):

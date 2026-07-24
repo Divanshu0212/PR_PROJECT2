@@ -1,4 +1,4 @@
-"""Gemini-backed JD analysis (`gemini-3.6-flash`).
+"""Gemini-backed JD analysis (`gemini-3.1-flash-lite`).
 
 Same contract and prompt discipline as `rho.jd.ollama`, but through Gemini's
 `responseSchema` so JD analysis and rewriting can share this backend the way

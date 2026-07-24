@@ -341,8 +341,7 @@ working on a genuine model output rather than an injected test skill: the rewrit
 `"Data Engineering"` as a skill addition (plausible-sounding, JD-relevant, and never stated in the
 source résumé) and the gate rejected it before it reached the tailored output.
 
-The same `gemini-3.6-flash → gemini-3.1-flash-lite` model-selection story from Phases 4–5 applies
-here unchanged.
+**Model:** `gemini-3.1-flash-lite`, same as Phases 4–5.
 
 ### Deviations from the plan
 

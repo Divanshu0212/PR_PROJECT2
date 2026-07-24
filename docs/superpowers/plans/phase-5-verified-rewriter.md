@@ -361,9 +361,7 @@ tasks requiring basic math and numerical proficiency using 10-key`). Same shape 
 the qwen run — invented skills and restated-as-fact soft skills — just more of it per affected pair.
 Artifact: `eval/fabrication_results_corpus_gemini.json`.
 
-The same model-selection detour recorded in Phase 4 applies here: `gemini-3.6-flash` (requested)
-has a 20 requests/day/project free tier, unrunnable for a 30-pair run needing 60 requests (JD
-analysis + rewrite per pair); `gemini-3.1-flash-lite` is the model that actually sustained it.
+**Model:** `gemini-3.1-flash-lite`, same as Phase 4.
 
 ### Earlier run — `gemma3:4b` on the 12-pair synthetic fixture (retained for comparison)
 

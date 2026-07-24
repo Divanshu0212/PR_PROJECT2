@@ -275,20 +275,24 @@ def _summarise(rows: list[dict]) -> dict:
 # --------------------------------------------------------------------------
 
 
-def load_c2() -> dict | None:
-    """Calibration metrics from `eval/fit_calibrator.py`'s saved progress file."""
-    path = EVAL_DIR / "progress.json"
+def load_c2(suffix: str = "") -> dict | None:
+    """Calibration metrics from `eval/fit_calibrator.py`'s saved progress file.
+
+    `suffix` selects a backend-specific artifact (e.g. `_gemini` reads
+    `progress_gemini.json`) without disturbing the qwen-baseline default.
+    """
+    path = EVAL_DIR / f"progress{suffix}.json"
     if not path.exists():
         return None
     return json.loads(path.read_text()).get("metrics")
 
 
-def load_c3() -> dict | None:
+def load_c3(suffix: str = "") -> dict | None:
     """Fabrication summary from `eval/fabrication_ablation.py`'s output.
 
     Prefers the corpus-backed run (the Phase-5 headline) over the fixture run.
     """
-    for name in ("fabrication_results_corpus.json", "fabrication_results.json"):
+    for name in (f"fabrication_results_corpus{suffix}.json", f"fabrication_results{suffix}.json"):
         path = EVAL_DIR / name
         if path.exists():
             d = json.loads(path.read_text())
@@ -478,6 +482,19 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=None, help="cap résumés per table")
     ap.add_argument("--tables", default="1a,1b,1c,2,3,4", help="comma-separated table ids")
     ap.add_argument("--no-cache", action="store_true", help="ignore the extraction cache")
+    ap.add_argument(
+        "--extraction-backend",
+        default=None,
+        choices=["ollama", "vllm", "gemini"],
+        help="override rho.config.settings.extraction_backend for table 1 (default: config's own setting)",
+    )
+    ap.add_argument(
+        "--suffix",
+        default="",
+        help="read backend-specific C2/C3 artifacts, e.g. --suffix _gemini reads "
+        "progress_gemini.json / fabrication_results_corpus_gemini.json instead of "
+        "the qwen-baseline files",
+    )
     args = ap.parse_args()
 
     want = {t.strip() for t in args.tables.split(",")}
@@ -486,6 +503,8 @@ def main() -> None:
 
     from rho.config import settings
 
+    if args.extraction_backend:
+        settings.extraction_backend = args.extraction_backend
     res["backend"] = getattr(settings, "extraction_backend", "unknown")
 
     all_seconds: list[float] = []
@@ -506,13 +525,13 @@ def main() -> None:
         all_seconds += [r["seconds"] for r in res["public"]["rows"]]
 
     if "2" in want:
-        res["c2"] = load_c2()
+        res["c2"] = load_c2(args.suffix)
     if "3" in want:
-        res["c3"] = load_c3()
+        res["c3"] = load_c3(args.suffix)
     if "4" in want:
         from eval.ablations import run_ablations
 
-        res["ablations"] = run_ablations()
+        res["ablations"] = run_ablations(args.suffix)
 
     if all_seconds:
         res["latency"] = {

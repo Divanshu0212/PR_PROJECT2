@@ -48,7 +48,7 @@ def test_ablation_a_and_c_are_not_the_same_measurement():
 
 def test_ablation_a_reports_na_rather_than_zero_without_sources(monkeypatch):
     """No source documents must surface as 'n/a', never as '0 rejected'."""
-    monkeypatch.setattr("eval.ablations._fabrication_sources", lambda: {})
+    monkeypatch.setattr("eval.ablations._fabrication_sources", lambda suffix="": {})
     rows = ablation_provenance()
     off = [r for r in rows if "OFF" in r["condition"]]
     assert off, "the OFF condition must always be reported"
@@ -68,3 +68,28 @@ def test_ablation_calibration_matches_the_saved_artifact():
     metrics = json.loads(open("eval/progress.json").read())["metrics"]
     calibrated = next(r for r in rows if "calibrated" in r["condition"])
     assert calibrated["value"].startswith(f"{metrics['mae']:.2f}")
+
+
+def test_ablation_calibration_reads_suffixed_artifact_when_given():
+    """A backend re-run (e.g. Gemini) writes progress_gemini.json rather than
+    overwriting the qwen baseline; `suffix` must read that file instead."""
+    rows = ablation_calibration(suffix="_gemini")
+    if not rows:
+        return  # gemini calibrator not yet fitted on this checkout
+    metrics = json.loads(open("eval/progress_gemini.json").read())["metrics"]
+    calibrated = next(r for r in rows if "calibrated" in r["condition"])
+    assert calibrated["value"].startswith(f"{metrics['mae']:.2f}")
+
+
+def test_ablation_gate_reads_suffixed_artifact_when_given():
+    rows = ablation_gate(suffix="_gemini")
+    if not rows:
+        return
+    data = json.loads(open("eval/fabrication_results_corpus_gemini.json").read())
+    off_row = next(r for r in rows if r["condition"] == "OFF")
+    assert off_row["value"] == data["unsourced_shipped_gate_off"]
+
+
+def test_ablation_default_suffix_is_unchanged():
+    """No suffix must keep reading the original qwen-baseline filenames."""
+    assert ablation_calibration() == ablation_calibration(suffix="")

@@ -27,7 +27,7 @@ def _load(name: str) -> dict | None:
     return json.loads(path.read_text()) if path.exists() else None
 
 
-def ablation_provenance() -> list[dict]:
+def ablation_provenance(suffix: str = "") -> list[dict]:
     """A — does the gate need the *provenance chain*, or just the source text?
 
     C and A must not be the same measurement wearing two labels. Ablation C
@@ -44,14 +44,16 @@ def ablation_provenance() -> list[dict]:
     Both conditions are recomputed here from the stored per-pair rejections, so
     the row does not silently inherit C's numbers.
     """
-    data = _load("fabrication_results_corpus.json") or _load("fabrication_results.json")
+    data = _load(f"fabrication_results_corpus{suffix}.json") or _load(
+        f"fabrication_results{suffix}.json"
+    )
     if not data:
         return []
     scored = [p for p in data.get("per_pair", []) if "error" not in p]
     if not scored:
         return []
 
-    pairs_by_id = _fabrication_sources()
+    pairs_by_id = _fabrication_sources(suffix)
     chain_blocked = 0  # rejected by the real, provenance-backed gate
     text_blocked = 0  # would also be caught by a plain source-text search
     checked = 0
@@ -134,23 +136,23 @@ def _appears_in(value: str, source_text: str) -> bool:
     return bool(words) and all(w in hay for w in words)
 
 
-SOURCES_CACHE = EVAL_DIR / "fabrication_sources.json"
-
-
-def _fabrication_sources() -> dict[str, str]:
+def _fabrication_sources(suffix: str = "") -> dict[str, str]:
     """pair_id -> source résumé text, for the benchmark the results came from.
 
     Two benchmarks, two id spaces. The curated fixture carries its résumés
     inline (`fab-*` ids). The corpus benchmark builds pairs at run time
     (`corpus-<seed>-<i>`) and the Phase-5 results file stores only rejections,
     not the source documents — so those are rebuilt from the same deterministic
-    builder (`build_pairs`, seed 0) and cached in `fabrication_sources.json`.
+    builder (`build_pairs`, seed 0) and cached in `fabrication_sources<suffix>.json`.
+    The cache is suffixed too: different backends can draw different corpus
+    seeds/sizes, so a qwen-run cache must not silently answer a Gemini lookup.
 
     Rebuilding uses `build_pairs`, not `build_corpus_pairs`: only the résumé
     text is needed, and `build_corpus_pairs` would additionally re-run JD
     analysis through the LLM for every pair.
     """
     sources: dict[str, str] = {}
+    sources_cache = EVAL_DIR / f"fabrication_sources{suffix}.json"
 
     fixture = EVAL_DIR.parent / "tests/fixtures/fabrication/pairs.json"
     if fixture.exists():
@@ -161,14 +163,14 @@ def _fabrication_sources() -> dict[str, str]:
         except (OSError, json.JSONDecodeError):
             pass
 
-    if SOURCES_CACHE.exists():
+    if sources_cache.exists():
         try:
-            sources.update(json.loads(SOURCES_CACHE.read_text()))
+            sources.update(json.loads(sources_cache.read_text()))
             return sources
         except (OSError, json.JSONDecodeError):
             pass
 
-    data = _load("fabrication_results_corpus.json")
+    data = _load(f"fabrication_results_corpus{suffix}.json")
     if not data:
         return sources
 
@@ -201,14 +203,14 @@ def _fabrication_sources() -> dict[str, str]:
             rebuilt[f"corpus-{seed}-{i}"] = "\n".join(ln for ln in lines if ln and ln.strip())
 
     if rebuilt:
-        SOURCES_CACHE.write_text(json.dumps(rebuilt, indent=1), encoding="utf-8")
+        sources_cache.write_text(json.dumps(rebuilt, indent=1), encoding="utf-8")
         sources.update(rebuilt)
     return sources
 
 
-def ablation_calibration() -> list[dict]:
+def ablation_calibration(suffix: str = "") -> list[dict]:
     """B — calibrated score vs raw cosine similarity (Phase-4 held-out split)."""
-    progress = _load("progress.json") or {}
+    progress = _load(f"progress{suffix}.json") or {}
     m = progress.get("metrics")
     if not m:
         return []
@@ -228,9 +230,11 @@ def ablation_calibration() -> list[dict]:
     ]
 
 
-def ablation_gate() -> list[dict]:
+def ablation_gate(suffix: str = "") -> list[dict]:
     """C — rewrite gate on/off (Phase-5 run)."""
-    data = _load("fabrication_results_corpus.json") or _load("fabrication_results.json")
+    data = _load(f"fabrication_results_corpus{suffix}.json") or _load(
+        f"fabrication_results{suffix}.json"
+    )
     if not data:
         return []
     return [
@@ -255,9 +259,11 @@ def ablation_gate() -> list[dict]:
     ]
 
 
-def run_ablations() -> list[dict]:
+def run_ablations(suffix: str = "") -> list[dict]:
     """All three ablations as flat rows for Table 4."""
-    return ablation_provenance() + ablation_calibration() + ablation_gate()
+    return (
+        ablation_provenance(suffix) + ablation_calibration(suffix) + ablation_gate(suffix)
+    )
 
 
 if __name__ == "__main__":

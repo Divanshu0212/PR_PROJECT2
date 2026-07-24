@@ -74,7 +74,11 @@ _FORMAT = {
         "skills": {"type": "array", "items": {"type": "string"}},
         "certifications": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["reasoning", "name"],
+    # work/education/skills are required so the decoder must emit the arrays.
+    # Left optional, qwen2.5:14b closes the object after `certifications` and
+    # drops the entire work history — a silent fill by omission, which reads
+    # identically to a résumé that genuinely has no jobs.
+    "required": ["reasoning", "name", "work", "education", "skills"],
 }
 
 # Résumés are long and CPU inference is slow; generous on purpose.

@@ -74,6 +74,20 @@ def test_parse_response_rejects_malformed_json():
         _parse_response({"message": {"content": "not json"}})
 
 
+def test_format_requires_section_arrays():
+    """The model must emit work/education/skills, even when empty.
+
+    Left optional, qwen2.5:14b closes the object after `certifications` and
+    silently drops a résumé's entire work history — indistinguishable from a
+    résumé that genuinely has none. Requiring the keys forces the decoder to
+    produce the arrays.
+    """
+    payload = _build_payload("Alice\nPython", model="gemma3:4b")
+    required = payload["format"]["required"]
+    for key in ("name", "work", "education", "skills"):
+        assert key in required
+
+
 def test_parse_response_leaves_absent_fields_empty():
     """No silent fills: a résumé with no work history yields [], not a stub entry."""
     raw = {"message": {"content": json.dumps({"reasoning": "r", "name": "Alice"})}}

@@ -34,4 +34,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+# "." as well as "src": the eval/ scripts are not part of the installed package
+# but tests/unit/test_corpus_pairing.py and test_fabrication_corpus.py import
+# them, so a bare `pytest tests/` needs the repo root importable too.
+pythonpath = ["src", "."]

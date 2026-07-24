@@ -431,3 +431,44 @@ result; quote MAE only alongside `y_mean`.
 - Ollama must bind beyond loopback for containers to reach it (`OLLAMA_HOST`), and a firewall rule
   must admit the Docker bridge — otherwise engine LLM calls hang until timeout rather than failing.
 - Progress viewer: `eval/progress.html` + `eval/progress.json` (written atomically per pair).
+
+### Gemini re-run (same 199 pairs, same target, JD-analysis backend swapped)
+
+`eval/fit_calibrator.py` now takes `--backend {ollama,groq,gemini}` (`make_feature_fn`,
+`src/rho/jd/gemini.py`). Same corpus, same seed (0), same `keywordMatch` target, same
+`ats-screener` harvest — only JD analysis moved from the local model to Gemini.
+
+| | qwen path (`gemma3:4b`, Ollama) | Gemini (`gemini-3.1-flash-lite`) |
+|---|---|---|
+| n_usable | 199 / 200 | **199 / 199** |
+| Calibrated MAE | 3.17 | 3.25 |
+| Calibrated Spearman ρ | 0.328 | **0.333** |
+| Cosine-baseline MAE | 26.00 | 27.58 |
+| Cosine-baseline Spearman ρ | 0.168 | **0.229** |
+| Wall-clock time | 39,162s (10.9h) | **836s (13.9min)** |
+| Pairs skipped (featurisation failure) | 1 | **0** |
+
+Calibrated MAE/Spearman are within noise of each other — this doc's own "Reproducibility note"
+above shows the qwen path itself varies (ρ 0.440 vs 0.328) between runs on the same pipeline, so a
+3-point Spearman gap here is not a meaningful backend difference. The real finding is speed: **47x
+faster wall-clock** for statistically equivalent calibration quality, because Gemini's hosted
+inference has no CPU-bound token generation to wait on.
+
+**Model selection detour, recorded because it is itself a finding.** The user asked for
+"Gemini 3.6 Flash" (`gemini-3.6-flash`, released after this assistant's January-2026 knowledge
+cutoff — confirmed to exist via the live `ListModels` API). Its free tier is
+`GenerateRequestsPerDayPerProjectPerModel-FreeTier` = **20 requests/day/project**, confirmed from
+a live 429 body — not a per-minute limit that pacing or backoff can smooth over. A 199-pair run
+needs ~199 requests just for JD analysis; the daily cap makes it structurally unrunnable regardless
+of key count. `gemini-2.5-flash`/`gemini-2.5-flash-lite` 404 ("no longer available to new users");
+`gemini-2.0-flash` hit its own quota within a few calls. `gemini-3.1-flash-lite` is the model that
+actually sustained this workload's call volume (199/199 calls, 0 skipped, 4.2s/pair average).
+Artifact: `eval/calibrator_gemini.joblib`; progress log `eval/progress_gemini.json`.
+
+A real bug surfaced building this: `rho.llm.gemini`'s daily-vs-per-minute quota classifier
+originally treated "429 with no `RetryInfo` detail" as the daily-quota signature — but Google's
+actual daily-quota 429 **does** carry a `RetryInfo` (a bogus ~30s delay that does not reflect a
+once-a-day reset), so every daily-quota exhaustion was misclassified as transient and retried
+through all keys pointlessly, once stalling a single pair for several minutes. Fixed to key off the
+`quotaId`/`quotaMetric` naming (`...PerDay...`) instead — see `rho.llm.gemini._is_daily_quota` and
+its regression tests in `tests/unit/test_gemini_client.py`.

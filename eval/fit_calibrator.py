@@ -20,18 +20,52 @@ from rho.ats import Calibrator, harvest_ats
 from rho.ats.aggregate import to_match_target, to_target
 from rho.ats.dataset import build_calibration_dataset
 from rho.jd import analyze_jd
-from rho.jd.ollama import analyze_jd_schema as _ollama_schema_fn
 from rho.matching import match
 
-# JD analysis runs through the LLM path (Ollama, temperature 0). The KeyBERT
-# fallback tried earlier extracted company names and boilerplate ("nashville
-# office") rather than requirements, leaving keyword_coverage and
-# fuzzy_coverage identically 0.0 across every pair.
+# JD analysis runs through an LLM path (temperature 0). The KeyBERT fallback
+# tried earlier extracted company names and boilerplate ("nashville office")
+# rather than requirements, leaving keyword_coverage and fuzzy_coverage
+# identically 0.0 across every pair.
 
 
-def feature_fn(resume, jd_text):
-    """resume+jd -> ComponentVector (rho's own raw signals, pre-calibration)."""
-    return match(resume, analyze_jd(jd_text, _schema_fn=_ollama_schema_fn)).component_vector
+def _jd_schema_fn(backend: str):
+    """Resolve the JD-analysis schema function for `backend`."""
+    if backend == "gemini":
+        from rho.jd.gemini import analyze_jd_schema_gemini
+
+        return analyze_jd_schema_gemini
+    if backend == "groq":
+        from rho.jd.groq import analyze_jd_schema_groq
+
+        return analyze_jd_schema_groq
+    from rho.jd.ollama import analyze_jd_schema as _ollama_schema_fn
+
+    return _ollama_schema_fn
+
+
+def make_feature_fn(backend: str = "ollama"):
+    """resume+jd -> ComponentVector (rho's own raw signals, pre-calibration).
+
+    Backend functions differ in what they hand back: Ollama's returns a raw
+    `JDSchema` meant to be converted via `analyze_jd(_schema_fn=...)`, while
+    Groq's and Gemini's call sites already do that conversion internally and
+    return a `RequirementSet` directly — so only the Ollama branch routes
+    through `analyze_jd`.
+    """
+    if backend == "gemini" or backend == "groq":
+        schema_fn = _jd_schema_fn(backend)
+
+        def feature_fn(resume, jd_text):
+            return match(resume, schema_fn(jd_text)).component_vector
+
+        return feature_fn
+
+    schema_fn = _jd_schema_fn(backend)
+
+    def feature_fn(resume, jd_text):
+        return match(resume, analyze_jd(jd_text, _schema_fn=schema_fn)).component_vector
+
+    return feature_fn
 
 
 PROGRESS_PATH = "eval/progress.json"
@@ -94,8 +128,10 @@ def main(
     seed: int = 0,
     out: str = "eval/calibrator.joblib",
     progress_path: str = PROGRESS_PATH,
+    backend: str = "ollama",
 ) -> dict:
     pairs = build_pairs(n_pairs=n_pairs, seed=seed)
+    feature_fn = make_feature_fn(backend)
 
     # Harvest once, derive both targets from the same engine outputs so the two
     # calibrations are directly comparable on identical features and pairs.
@@ -127,6 +163,7 @@ def main(
     overall = _fit_and_score(X, y_overall, seed, None)
 
     metrics = {
+        "backend": backend,
         "n_pairs_requested": n_pairs,
         "n_usable": len(X),
         "target": "keywordMatch",
@@ -164,5 +201,12 @@ if __name__ == "__main__":
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="eval/calibrator.joblib")
     p.add_argument("--progress-path", default=PROGRESS_PATH)
+    p.add_argument("--backend", default="ollama", choices=["ollama", "groq", "gemini"])
     a = p.parse_args()
-    main(n_pairs=a.n_pairs, seed=a.seed, out=a.out, progress_path=a.progress_path)
+    main(
+        n_pairs=a.n_pairs,
+        seed=a.seed,
+        out=a.out,
+        progress_path=a.progress_path,
+        backend=a.backend,
+    )

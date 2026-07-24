@@ -33,11 +33,15 @@ PAIRS_PATH = Path(__file__).parent.parent / "tests/fixtures/fabrication/pairs.js
 
 
 def get_rewriter(backend: str):
-    """Resolve the rewrite function for `backend` ("groq" or "ollama")."""
+    """Resolve the rewrite function for `backend` ("groq", "gemini", or "ollama")."""
     if backend == "groq":
         from rho.rewrite.groq import rewrite_schema_groq
 
         return rewrite_schema_groq
+    if backend == "gemini":
+        from rho.rewrite.gemini import rewrite_schema_gemini
+
+        return rewrite_schema_gemini
     from rho.rewrite.llm import rewrite_schema
 
     return rewrite_schema
@@ -184,7 +188,7 @@ def run(
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None)
-    ap.add_argument("--backend", default="ollama", choices=["groq", "ollama"])
+    ap.add_argument("--backend", default="ollama", choices=["groq", "gemini", "ollama"])
     ap.add_argument("--workers", type=int, default=5)
     ap.add_argument(
         "--corpus",

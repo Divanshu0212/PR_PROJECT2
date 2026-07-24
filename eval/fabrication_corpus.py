@@ -48,11 +48,15 @@ def corpus_prov(text: str, doc_id: str) -> ProvenanceMap:
 
 
 def _jd_analyzer(backend: str):
-    """Resolve the JD-analysis function for `backend` ("ollama" or "groq")."""
+    """Resolve the JD-analysis function for `backend` ("ollama", "groq", "gemini")."""
     if backend == "groq":
         from rho.jd.groq import analyze_jd_schema_groq
 
         return analyze_jd_schema_groq
+    if backend == "gemini":
+        from rho.jd.gemini import analyze_jd_schema_gemini
+
+        return analyze_jd_schema_gemini
     # Ollama path: reuse the frozen analyze_jd contract with the Ollama schema fn.
     from rho.jd import analyze_jd
     from rho.jd.ollama import analyze_jd_schema as _ollama_schema_fn
@@ -80,8 +84,8 @@ def build_corpus_pairs(
     from rho.matching import match
 
     analyze = _jd_analyzer(backend)
-    # Ollama runs one CPU model; concurrent calls thrash. Groq is network-bound.
-    jd_workers = workers if backend == "groq" else 1
+    # Ollama runs one CPU model; concurrent calls thrash. Groq/Gemini are network-bound.
+    jd_workers = workers if backend in ("groq", "gemini") else 1
 
     raw_pairs = [
         (_trim(resume), jd_text)

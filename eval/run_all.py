@@ -372,10 +372,12 @@ def write_results(res: dict) -> None:
 
     pub = res.get("public", {}).get("summary")
     if pub and pub.get("n"):
+        pub_failed = len(res.get("public", {}).get("failures") or [])
         add("\n### Table 1c — Public human-annotated gold set (headline C1)\n")
         add(
-            f"`kens1ang/resume-ner-labelled`, n={pub['n']} résumés. Annotations are "
-            "independent of this system and of its authors.\n"
+            f"`kens1ang/resume-ner-labelled`, n={pub['n']} résumés scored"
+            + (f" ({pub_failed} failed extraction, excluded)" if pub_failed else "")
+            + ". Annotations are independent of this system and of its authors.\n"
         )
         add("| Field | F1 |")
         add("|---|---|")
@@ -390,9 +392,12 @@ def write_results(res: dict) -> None:
 
     syn = res.get("synthetic", {}).get("summary")
     if syn and syn.get("n"):
+        syn_failed = len(res.get("synthetic", {}).get("failures") or [])
         add("\n### Table 1a — Synthetic gold set (upper bound)\n")
         add(
-            f"n={syn['n']}. Labels and provenance spans are exact by construction. "
+            f"n={syn['n']} scored"
+            + (f" ({syn_failed} failed extraction, excluded)" if syn_failed else "")
+            + ". Labels and provenance spans are exact by construction. "
             "Templated résumés are cleaner than real ones, so **treat this as an upper "
             "bound**, not an estimate of field performance.\n"
         )
@@ -409,9 +414,12 @@ def write_results(res: dict) -> None:
 
     real = res.get("real", {}).get("summary")
     if real and real.get("n"):
+        real_failed = len(res.get("real", {}).get("failures") or [])
         add("\n### Table 1b — Hand-labelled real corpus subset (reality check)\n")
         add(
-            f"n={real['n']} résumés from `Resume.csv`. Labelled by the implementing agent, "
+            f"n={real['n']} résumés from `Resume.csv` scored"
+            + (f" ({real_failed} failed extraction, excluded)" if real_failed else "")
+            + ". Labelled by the implementing agent, "
             "**not** independently verified — the public set (1c) is the trustworthy real-data "
             "number. `name` and `work[].company` are unlabelable: the corpus anonymises them.\n"
         )
@@ -490,12 +498,23 @@ def write_results(res: dict) -> None:
     if lat:
         add(f"- Extraction: median **{_fmt(lat.get('median'), 1)}s** per résumé "
             f"(n={lat.get('n')}, min {_fmt(lat.get('min'), 1)}s, max {_fmt(lat.get('max'), 1)}s).")
-    add(
-        "- **Cost per successful task: $0.00 in API spend.** The whole pipeline runs on "
-        "self-hosted open models (Ollama) on a CPU-only host; the cost is wall-clock compute, "
-        "not per-token billing. This is a deliberate property of the design — every "
-        "contribution is reproducible without a commercial API account."
-    )
+    backend = res.get("backend", "unknown")
+    if backend in ("ollama", "vllm"):
+        add(
+            "- **Cost per successful task: $0.00 in API spend.** The whole pipeline runs on "
+            "self-hosted open models (Ollama/vLLM) on this host; the cost is wall-clock "
+            "compute, not per-token billing. This is a deliberate property of the design — "
+            "every contribution is reproducible without a commercial API account."
+        )
+    else:
+        add(
+            f"- **Cost per successful task: $0.00 in API spend** (backend `{backend}`, "
+            "free-tier quota). Unlike the Ollama/vLLM path, this backend is a hosted "
+            "commercial API — free here because the run stayed inside the provider's "
+            "free-tier daily quota, not because the design has no billing surface. "
+            "Reproducing this run at larger scale would need either a paid tier or "
+            "spreading calls across more free-tier accounts."
+        )
 
     add("\n## Dataset sizes\n")
     sizes = res.get("dataset_sizes", {})

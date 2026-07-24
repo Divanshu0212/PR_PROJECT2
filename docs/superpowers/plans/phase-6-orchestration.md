@@ -310,8 +310,39 @@ git add -A && git commit -m "feat: wire /optimize to run_pipeline"
 - **End-to-end latency:**
   - mock (all LLM nodes stubbed, warm process): **median 89.7 ms** (n=5, min 83.3, max 193.5).
   - real LLM (qwen2.5:14b via Ollama; **extraction + JD analysis + rewrite all real**, ingest/match/score/review real): **268.5 s** for one résumé + JD. Dominated by the three 14B generations on CPU.
-- **Invariant violations observed on real runs:** **0**. On the real run the tailored résumé's hard-content tokens all resolved to a `prov_id` (`invariant_ok=True`, `violations=[]`), fabrication report `total_edits=0 / verified_edits=0 / rate=0.000`. The reviewer's failure path is covered by `test_pipeline_reports_invariant`, which injects an unsourced skill ("Kubernetes") and asserts `invariant_ok=False` with the value reported rather than the run crashing.
+- **Invariant violations observed on real runs (qwen):** **0**. On the real run the tailored résumé's hard-content tokens all resolved to a `prov_id` (`invariant_ok=True`, `violations=[]`), fabrication report `total_edits=0 / verified_edits=0 / rate=0.000`. The reviewer's failure path is covered by `test_pipeline_reports_invariant`, which injects an unsourced skill ("Kubernetes") and asserts `invariant_ok=False` with the value reported rather than the run crashing.
 - **Tests passing:** **136 passed, 4 skipped, 0 failed** (whole suite, bare `pytest tests/`). Phase-6 tests specifically: 3 unit (`tests/unit/test_review.py`) + 4 integration (`tests/integration/test_pipeline.py`) + 11 backend unit (`test_extraction_ollama.py`, `test_extraction_backend.py`) = 18/18. The 4th skip is the vLLM-path assertion, which `importorskip`s `outlines` on a CUDA-less host.
+
+### Gemini re-run — same résumé/JD, all three LLM nodes on `gemini-3.1-flash-lite`
+
+`extract_node`, `jd_node`, `rewrite_node` monkeypatched to `rho.extraction.gemini.extract_schema_gemini`,
+`rho.jd.gemini.analyze_jd_schema_gemini`, `rho.rewrite.gemini.rewrite_schema_gemini`; ingest/match/score/review
+unchanged. Same résumé + JD text as the qwen run.
+
+| | qwen2.5:14b (Ollama, CPU) | Gemini (`gemini-3.1-flash-lite`) |
+|---|---|---|
+| End-to-end latency | 268.5 s | **15.7 s** (17x faster) |
+| `final_score` | 18.36 | 19.16 |
+| Fabrication gate | `total_edits=0` (nothing to reject) | `total_edits=1, rejected=1` — **`"Data Engineering"` rejected, no supporting prov_id** |
+| `invariant_ok` | True | **False** |
+
+**The Gemini run is the more informative one of the two, precisely because it failed one check.**
+`invariant_ok=False` — a real, reproducible finding, not a fluke: `rho.extraction.gemini` returned
+`start_date="2020-01-01T00:00:00Z"` for a résumé that plainly states `"2020-2024"`, over-formatting
+the plain year into a full ISO timestamp despite the prompt showing the desired shape
+(`"Dates in ISO-8601 (2019, 2019-06)"`) — confirmed deterministic across 3 repeat calls at
+temperature 0, not sampling noise. `attach_provenance`'s fuzzy match
+(`rapidfuzz.partial_ratio("2020-01-01t00:00:00z", "2020-2024") == 80`) falls under the 90 threshold
+that `"2020"` alone would clear at 100, so the date carries no `prov_id` and the reviewer correctly
+flags it. This is exactly the reviewer node doing its job (shared-context Section 7: "on violation,
+flag in the response, do not crash") — the pipeline did not crash, it shipped a response with
+`invariant_ok=False` so the caller can see the gap. It also demonstrates the fabrication gate
+working on a genuine model output rather than an injected test skill: the rewriter proposed
+`"Data Engineering"` as a skill addition (plausible-sounding, JD-relevant, and never stated in the
+source résumé) and the gate rejected it before it reached the tailored output.
+
+The same `gemini-3.6-flash → gemini-3.1-flash-lite` model-selection story from Phases 4–5 applies
+here unchanged.
 
 ### Deviations from the plan
 

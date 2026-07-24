@@ -3,8 +3,14 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     app_name: str = "rho"
-    extraction_model: str = "Qwen/Qwen3-0.6B"  # override in P2
+    extraction_model: str = "Qwen/Qwen3-0.6B"  # vLLM path (rho.extraction.llm)
     temperature: float = 0.2
+    # Extraction backend (P6): "ollama" or "vllm". The plan specifies vLLM +
+    # Outlines, but that needs CUDA the calibration host does not have, so the
+    # default is the Ollama path — the same deviation JD analysis (P4) and
+    # rewriting (P5) already took. Set to "vllm" on a GPU host.
+    extraction_backend: str = "ollama"
+    extraction_model_ollama: str = "qwen2.5:14b"
     # JD analysis via Ollama (P4): the vLLM path in rho.jd.llm needs CUDA, which
     # the calibration host does not have. temperature is pinned to 0 at the call
     # site for reproducibility.

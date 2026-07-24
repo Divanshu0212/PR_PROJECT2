@@ -128,10 +128,21 @@ def _extract_doc(path: Path, use_cache: bool = True):
 
 
 def eval_synthetic(limit: int | None, use_cache: bool = True) -> dict:
-    """Table 1a — synthetic gold: every field labelled, provenance exact."""
+    """Table 1a — synthetic gold: every field labelled, provenance exact.
+
+    One doc's extraction failing (LLM outage, a permanently denied key, a
+    malformed response) must not lose the whole table's progress — the failure
+    is recorded and printed, never silently dropped, but the loop continues.
+    """
     rows = []
+    failures: list[str] = []
     for path, gold in load_gold(limit=limit):
-        pred, seconds, prov = _extract_doc(path, use_cache)
+        try:
+            pred, seconds, prov = _extract_doc(path, use_cache)
+        except Exception as exc:
+            failures.append(f"{gold['id']}: {type(exc).__name__}: {exc}")
+            print(f"  [1a {len(rows) + len(failures)}] {gold['id']}: FAILED ({exc})", flush=True)
+            continue
         from rho.models.resume import StructuredResume
 
         resume_obj = StructuredResume(**pred)
@@ -160,7 +171,9 @@ def eval_synthetic(limit: int | None, use_cache: bool = True) -> dict:
             f"({rows[-1]['seconds']:.0f}s)",
             flush=True,
         )
-    return {"rows": rows, "summary": _summarise(rows)}
+    if failures:
+        print(f"  WARNING: {len(failures)} doc(s) failed extraction: {failures[:3]}", flush=True)
+    return {"rows": rows, "summary": _summarise(rows), "failures": failures}
 
 
 def _resolve_gold_prov(gold_values: dict, prov) -> dict:
@@ -189,9 +202,15 @@ def eval_public(limit: int | None, use_cache: bool = True) -> dict:
     from rho.models.resume import StructuredResume
 
     rows = []
+    failures: list[str] = []
     for text, gold in load_public_gold(limit=limit):
         doc = segment_corpus_text(text)
-        pred, seconds, prov = _extract_text(doc, f"pub{gold['id']}.txt", use_cache)
+        try:
+            pred, seconds, prov = _extract_text(doc, f"pub{gold['id']}.txt", use_cache)
+        except Exception as exc:
+            failures.append(f"{gold['id']}: {type(exc).__name__}: {exc}")
+            print(f"  [1c {len(rows) + len(failures)}] {gold['id']}: FAILED ({exc})", flush=True)
+            continue
         resume_obj = StructuredResume(**pred)
         pred_titles = {"work_titles": [w.get("title", "") for w in pred.get("work", [])]}
         pred_insts = {"institutions": [e.get("institution", "") for e in pred.get("education", [])]}
@@ -216,7 +235,9 @@ def eval_public(limit: int | None, use_cache: bool = True) -> dict:
             f"({rows[-1]['seconds']:.0f}s)",
             flush=True,
         )
-    return {"rows": rows, "summary": _summarise(rows)}
+    if failures:
+        print(f"  WARNING: {len(failures)} doc(s) failed extraction: {failures[:3]}", flush=True)
+    return {"rows": rows, "summary": _summarise(rows), "failures": failures}
 
 
 def _extract_text(doc: str, filename: str, use_cache: bool = True):
@@ -236,8 +257,14 @@ def eval_real(limit: int | None, use_cache: bool = True) -> dict:
     than scored against a placeholder.
     """
     rows = []
+    failures: list[str] = []
     for path, gold in load_real_gold(limit=limit):
-        pred, seconds, _prov = _extract_doc(path, use_cache)
+        try:
+            pred, seconds, _prov = _extract_doc(path, use_cache)
+        except Exception as exc:
+            failures.append(f"{gold['id']}: {type(exc).__name__}: {exc}")
+            print(f"  [1b {len(rows) + len(failures)}] {gold['id']}: FAILED ({exc})", flush=True)
+            continue
         pred_titles = {"work_titles": [w.get("title", "") for w in pred.get("work", [])]}
         pred_insts = {"institutions": [e.get("institution", "") for e in pred.get("education", [])]}
         rows.append(
@@ -256,7 +283,9 @@ def eval_real(limit: int | None, use_cache: bool = True) -> dict:
             f"title={rows[-1]['title_f1']:.2f} ({rows[-1]['seconds']:.0f}s)",
             flush=True,
         )
-    return {"rows": rows, "summary": _summarise(rows)}
+    if failures:
+        print(f"  WARNING: {len(failures)} doc(s) failed extraction: {failures[:3]}", flush=True)
+    return {"rows": rows, "summary": _summarise(rows), "failures": failures}
 
 
 def _summarise(rows: list[dict]) -> dict:

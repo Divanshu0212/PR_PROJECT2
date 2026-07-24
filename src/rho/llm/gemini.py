@@ -149,6 +149,16 @@ def _httpx_transport(url: str, payload: dict, timeout: int) -> tuple[dict, dict]
         if _is_daily_quota(body):
             raise QuotaExhausted(f"Gemini daily quota exhausted: {message}")
         raise RateLimited(_parse_retry_after(body, response.headers), f"429: {message}")
+    if response.status_code == 403:
+        # A key can be individually revoked ("project denied access") without
+        # the whole account's quota being spent — observed live during a
+        # 300-résumé Phase-7 run. Retrying a permanently-denied key every
+        # rotation wastes the retry budget on something that can never
+        # succeed; treat it the same as QuotaExhausted so the client rotates
+        # it out and keeps serving the call from the other keys.
+        body = response.json() if response.content else {}
+        message = json.dumps(body)[:300]
+        raise QuotaExhausted(f"Gemini key denied (403): {message}")
     response.raise_for_status()
     return response.json(), dict(response.headers)
 

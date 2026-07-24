@@ -262,6 +262,44 @@ def test_transport_raises_quota_exhausted_on_daily_quota_body():
             sys.modules["httpx"] = saved
 
 
+def test_transport_raises_quota_exhausted_on_403_denied_key():
+    """A key can be individually revoked (403 PERMISSION_DENIED) without the
+    account's quota being spent — observed live during a 300-résumé Phase-7
+    run. Must be treated as permanently dead, same as QuotaExhausted, so the
+    client rotates off it instead of burning retries on it every rotation."""
+    from rho.llm.gemini import _httpx_transport
+
+    class FakeResponse:
+        def __init__(self, body, status_code):
+            self.status_code = status_code
+            self.content = json.dumps(body).encode()
+            self.headers = {}
+
+        def json(self):
+            return json.loads(self.content)
+
+    denied_body = {
+        "error": {
+            "code": 403,
+            "message": "Your project has been denied access. Please contact support.",
+            "status": "PERMISSION_DENIED",
+        }
+    }
+
+    import sys
+    import types
+
+    fake_httpx = types.SimpleNamespace(post=lambda *a, **k: FakeResponse(denied_body, 403))
+    saved = sys.modules.get("httpx")
+    sys.modules["httpx"] = fake_httpx
+    try:
+        with pytest.raises(QuotaExhausted):
+            _httpx_transport("u", {}, 10)
+    finally:
+        if saved is not None:
+            sys.modules["httpx"] = saved
+
+
 def test_daily_quota_exhaustion_moves_to_next_key_not_retried():
     """Unlike Groq's shared TPD, Gemini quota is per-key/per-project: rotate off
     the exhausted key rather than aborting the whole call."""

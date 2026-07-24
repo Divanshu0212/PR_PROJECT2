@@ -43,7 +43,7 @@
 **Interfaces:**
 - Produces: `PipelineState` (TypedDict with `file_bytes, filename, jd_text, markdown, prov, resume, reqs, match_result, tailored, final_score, invariant_ok, invariant_violations`). `check_provenance_invariant(tailored: StructuredResume, prov) -> (bool, list[str])` — returns False + list of unsupported values if any hard-content token lacks a `prov_id`. `compute_final_score(match_result, fabrication_report) -> float`.
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 ```python
 # tests/unit/test_review.py
 from rho.models.provenance import SourceSpan, ProvenanceMap
@@ -69,10 +69,10 @@ def test_final_score_penalized_by_fabrication():
     assert compute_final_score(mr, clean) == 80.0
 ```
 
-- [ ] **Step 2: Run to verify fail** → FAIL.
+- [x] **Step 2: Run to verify fail** → FAIL.
 Run: `pytest tests/unit/test_review.py -v`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 ```python
 # src/rho/graph/state.py
 from typing import TypedDict, Optional
@@ -104,9 +104,9 @@ def compute_final_score(match_result, fabrication_report):
     return match_result.predicted_score
 ```
 
-- [ ] **Step 4: Run to verify pass** → PASS.
+- [x] **Step 4: Run to verify pass** → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add -A && git commit -m "feat: pipeline state + provenance-invariant reviewer"
 ```
@@ -122,7 +122,7 @@ git add -A && git commit -m "feat: pipeline state + provenance-invariant reviewe
 **Interfaces:**
 - Produces: node functions each `(state: PipelineState) -> dict` (partial state update). `ingest_node`, `extract_node`, `jd_node`, `match_node`, `score_node`, `rewrite_node`, `review_node`. `score_node` loads calibrator if `eval/calibrator.joblib` exists.
 
-- [ ] **Step 1: Implement**
+- [x] **Step 1: Implement**
 ```python
 # src/rho/graph/nodes.py
 import os
@@ -156,7 +156,7 @@ def review_node(state):
     return {"invariant_ok": ok, "invariant_violations": viol, "final_score": final}
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 ```bash
 git add -A && git commit -m "feat: LangGraph node functions"
 ```
@@ -172,10 +172,10 @@ git add -A && git commit -m "feat: LangGraph node functions"
 **Interfaces:**
 - Produces: `build_graph()` (compiled LangGraph) and `run_pipeline(file_bytes, filename, jd_text) -> PipelineResponse`. Graph edges: `START → ingest_node → extract_node`; `START → jd_node`; both `extract_node` and `jd_node → match_node` (fan-in); `match_node → score_node → rewrite_node → review_node → END`. For tests without an LLM, `run_pipeline` accepts injectable `_extract_fn`/`_rewrite_fn`/`_jd_fn` OR the test monkeypatches component functions.
 
-- [ ] **Step 1: Add dep**
+- [x] **Step 1: Add dep**
 Add `langgraph>=0.2` to `pyproject.toml`; install.
 
-- [ ] **Step 2: Write integration test (monkeypatched components, no LLM)**
+- [x] **Step 2: Write integration test (monkeypatched components, no LLM)**
 ```python
 # tests/integration/test_pipeline.py
 from rho.models.resume import StructuredResume
@@ -197,10 +197,10 @@ def test_pipeline_end_to_end(monkeypatch):
     assert isinstance(resp.final_score, float)
 ```
 
-- [ ] **Step 3: Run to verify fail** → FAIL.
+- [x] **Step 3: Run to verify fail** → FAIL.
 Run: `pytest tests/integration/test_pipeline.py -v`
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 ```python
 # src/rho/graph/__init__.py
 from langgraph.graph import StateGraph, START, END
@@ -236,9 +236,9 @@ def run_pipeline(file_bytes: bytes, filename: str, jd_text: str) -> PipelineResp
     )
 ```
 
-- [ ] **Step 5: Run to verify pass** → PASS.
+- [x] **Step 5: Run to verify pass** → PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 ```bash
 git add -A && git commit -m "feat: LangGraph pipeline + run_pipeline with parallel fan-in"
 ```
@@ -254,7 +254,7 @@ git add -A && git commit -m "feat: LangGraph pipeline + run_pipeline with parall
 **Interfaces:**
 - Produces: `/optimize` now calls `run_pipeline` with the uploaded file + `jd_text`, returns the real `PipelineResponse`.
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 ```python
 # add to tests/integration/test_pipeline.py
 def test_optimize_endpoint_calls_pipeline(monkeypatch):
@@ -277,9 +277,9 @@ def test_optimize_endpoint_calls_pipeline(monkeypatch):
     assert r.json()["final_score"] == 77.0
 ```
 
-- [ ] **Step 2: Run to verify fail** → FAIL (still returns placeholder).
+- [x] **Step 2: Run to verify fail** → FAIL (still returns placeholder).
 
-- [ ] **Step 3: Implement** — replace placeholder in `app.py`:
+- [x] **Step 3: Implement** — replace placeholder in `app.py`:
 ```python
 from rho.graph import run_pipeline
 @app.post("/optimize", response_model=PipelineResponse)
@@ -289,9 +289,9 @@ async def optimize(file: UploadFile, jd_text: str = Form(...)):
 ```
 (Remove the `_placeholder_response` helper.)
 
-- [ ] **Step 4: Run to verify pass** → PASS.
+- [x] **Step 4: Run to verify pass** → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add -A && git commit -m "feat: wire /optimize to run_pipeline"
 ```
@@ -299,13 +299,34 @@ git add -A && git commit -m "feat: wire /optimize to run_pipeline"
 ---
 
 ## Self-Review
-- [ ] Graph fans in at `match` after both `extract` and `jd`.
-- [ ] `run_pipeline` returns a full `PipelineResponse`.
-- [ ] Reviewer sets `invariant_ok`/violations; `/optimize` returns real pipeline output.
-- [ ] `pytest tests/integration/test_pipeline.py -v` green.
+- [x] Graph fans in at `match` after both `extract` and `jd`.
+- [x] `run_pipeline` returns a full `PipelineResponse`.
+- [x] Reviewer sets `invariant_ok`/violations; `/optimize` returns real pipeline output.
+- [x] `pytest tests/integration/test_pipeline.py -v` green.
 
-## Results (fill in)
-- LangGraph version: ___
-- End-to-end latency (mock / real LLM): ___
-- Invariant violations observed on real runs: ___
-- Tests passing: ___ / ___
+## Results
+
+- **LangGraph version:** 1.2.9 (added to `pyproject.toml` as `langgraph>=0.2`).
+- **End-to-end latency:**
+  - mock (all LLM nodes stubbed, warm process): **median 89.7 ms** (n=5, min 83.3, max 193.5).
+  - real LLM (qwen2.5:14b via Ollama, JD analysis + rewrite; ingest/match/score/review real): **269 s** for one résumé + JD. Dominated by the two 14B generations on CPU.
+- **Invariant violations observed on real runs:** **0**. On the real run the tailored résumé's hard-content tokens all resolved to a `prov_id` (`invariant_ok=True`, `violations=[]`), fabrication report `total_edits=0 / verified_edits=0 / rate=0.000`. The reviewer's failure path is covered by `test_pipeline_reports_invariant`, which injects an unsourced skill ("Kubernetes") and asserts `invariant_ok=False` with the value reported rather than the run crashing.
+- **Tests passing:** **126 passed, 3 skipped, 0 failed** (whole suite, `PYTHONPATH=. pytest tests/`). Phase-6 tests specifically: 3 unit (`tests/unit/test_review.py`) + 4 integration (`tests/integration/test_pipeline.py`) = 7/7.
+
+### Deviations from the plan
+
+1. **`match` needs `defer=True`; the plan's edge topology alone is not a barrier.** With only the plan's edges, LangGraph's default *any-of* triggering fires `match` as soon as the short `jd` branch lands (superstep 2) — on a state with no `resume` yet, raising `KeyError: 'resume'` — and then fires it a **second** time after `extract` completes. `build_graph` therefore registers `g.add_node("match", N.match_node, defer=True)`, which defers the node until all pending predecessor paths settle. Verified: `match` runs exactly once, after both branches (`test_pipeline_fans_in_after_both_branches` asserts the call count, so the regression cannot return silently).
+2. **`thread_id` is per-call (`run-{uuid4()}`), not the constant `"run"` in the plan.** A fixed thread id makes every request resume the same checkpoint, so a second `/optimize` call would replay against the first run's state.
+3. **Real end-to-end run stubs `extract` only.** `rho/extraction/llm.py` has just the vLLM+Outlines path, which needs CUDA this host lacks (same constraint Phases 4–5 recorded); `rho/jd/ollama.py` and `rho/rewrite/llm.py` do have Ollama paths and ran for real. The stub feeds a hand-built `ExtractionSchema` through the **real** `to_structured` + `attach_provenance`, so the provenance chain under test is genuine. An Ollama extraction backend is Phase-2 scope.
+4. **Two pre-existing tests adjusted, not rewritten.**
+   - `tests/integration/test_optimize_shape.py` asserted the shape of the placeholder response; `/optimize` now drives the real graph, so it takes the shared `stub_nodes` fixture (new `tests/integration/conftest.py`). Its assertion — response shape — is unchanged.
+   - `tests/unit/test_stubs.py` asserted `checked > 0` ("stubs must still exist"). `run_pipeline` was the last Section-6 stub, and that file's own comment said to drop the assertion when the last one landed. It now asserts `checked == 0`, so a reintroduced silently-returning stub still fails the test.
+5. **`predicted_score` fallback.** `eval/calibrator.joblib` is present, so `score_node` applied the Phase-4 calibrator (real run scored 18.36, not the 0.0 raw fallback). When the file is absent the node logs a warning and leaves the matcher's 0.0 rather than inventing a score (shared context Section 8).
+
+### Note on the fabrication figure
+
+`total_edits=0` on the real run means the rewriter returned no hard-content values absent from the source, so the gate had nothing to accept or reject — a `fabrication_rate` of 0.000 over zero edits is not evidence the gate works. The gate's actual behaviour is measured by the Phase-5 corpus run (gate-OFF 31 fabrications, gate-ON 0); Phase 6 only demonstrates that the reviewer re-asserts the invariant in-pipeline.
+
+### Pre-existing issue (not introduced here, not fixed here)
+
+`tests/unit/test_corpus_pairing.py` and `tests/unit/test_fabrication_corpus.py` import `eval.*`, but `pyproject.toml` sets `pythonpath = ["src"]` only, so a bare `pytest tests/` fails collection on both with `ModuleNotFoundError: No module named 'eval'`. Confirmed pre-existing by stashing the Phase-6 changes. They pass under `PYTHONPATH=. pytest tests/`. Fix is to add `"."` to `tool.pytest.ini_options.pythonpath` — left alone as out of Phase-6 scope.

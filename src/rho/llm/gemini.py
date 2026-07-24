@@ -222,9 +222,15 @@ class GeminiClient:
                 errors.append(f"{type(exc).__name__}: {exc}")
                 if attempt + 1 >= attempts:
                     break
+                # Only sleep once a full rotation has been tried — a single
+                # rate-limited key says nothing about the next one, and
+                # sleeping on every attempt turns one bad pair into a ~20min
+                # stall (7 keys x 3 rounds x up to 71s each).
+                if (attempt + 1) % max(len(live_keys), 1) != 0:
+                    continue
                 if isinstance(exc, RateLimited):
                     time.sleep(min(exc.retry_after, self.max_wait) + random.uniform(0, 1))
-                elif (attempt + 1) % max(len(live_keys), 1) == 0:
+                else:
                     delay = min(self.backoff * 2 ** (attempt // max(len(live_keys), 1)), 30.0)
                     time.sleep(random.uniform(0, delay))
         raise RuntimeError(

@@ -110,6 +110,34 @@ def test_rate_limited_key_waits_server_reset_before_retrying():
     assert slept and 9.0 <= slept[0] <= 10.0
 
 
+def test_rate_limited_key_falls_through_to_next_before_sleeping():
+    """A single rate-limited key must not stall the whole call.
+
+    Regression: sleeping on every rate-limited attempt (rather than once per
+    full rotation) turned one stubborn pair into a ~20min stall in the
+    199-pair calibrator run (7 keys x 3 rounds x up to 71s each).
+    """
+    slept, calls = [], []
+
+    def first_key_limited(url, payload, timeout):
+        calls.append(url)
+        if len(calls) == 1:
+            raise RateLimited(70.0, "429")
+        return _body('{"ok":true}'), {}
+
+    client = GeminiClient(api_keys=["k1", "k2", "k3"], transport=first_key_limited)
+    import rho.llm.gemini as mod
+
+    original = mod.time.sleep
+    mod.time.sleep = slept.append
+    try:
+        assert client.complete_json("p") == {"ok": True}
+    finally:
+        mod.time.sleep = original
+    assert "key=k1" in calls[0] and "key=k2" in calls[1]
+    assert slept == []  # fell through to k2 without sleeping
+
+
 def test_rate_limit_wait_is_capped():
     from rho.llm import gemini as mod
 

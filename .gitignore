@@ -10,3 +10,6 @@ dist/
 vendor/ats_screener/node_modules/
 
 eval/progress.json
+
+# Eval scratch outputs (datasets themselves ARE committed; caches are not)
+eval/**/__pycache__/

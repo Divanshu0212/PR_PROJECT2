@@ -20,7 +20,13 @@ def _resolve_schema_fn(backend: str):
         from rho.extraction.llm import extract_schema
 
         return extract_schema
-    raise ValueError(f"unknown extraction backend: {backend!r} (want 'ollama'/'vllm')")
+    if backend == "gemini":
+        from rho.extraction.gemini import extract_schema_gemini
+
+        return extract_schema_gemini
+    raise ValueError(
+        f"unknown extraction backend: {backend!r} (want 'ollama'/'vllm'/'gemini')"
+    )
 
 
 def extract(markdown: str, prov: ProvenanceMap, _schema_fn=None) -> StructuredResume:

@@ -31,6 +31,12 @@ def test_resolve_vllm_backend_is_still_reachable():
     assert _resolve_schema_fn("vllm") is extract_schema
 
 
+def test_resolve_returns_gemini_schema_fn():
+    from rho.extraction.gemini import extract_schema_gemini
+
+    assert _resolve_schema_fn("gemini") is extract_schema_gemini
+
+
 def test_unknown_backend_fails_loudly():
     """A typo'd backend must not silently fall through to some default."""
     with pytest.raises(ValueError, match="unknown extraction backend"):

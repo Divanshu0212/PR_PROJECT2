@@ -29,10 +29,12 @@ from typing import Any
 
 GOLD_DIR = Path(__file__).parent / "gold"
 REAL_DIR = Path(__file__).parent / "real"
+PUBLIC_DIR = Path(__file__).parent / "public"
 
 __all__ = [
     "load_gold",
     "load_real_gold",
+    "load_public_gold",
     "load_calibration_pairs",
     "load_fabrication_pairs",
 ]
@@ -90,6 +92,33 @@ def load_real_gold(limit: int | None = None, data_dir: Path | None = None) -> li
         rec = dict(labels[rid])
         rec["id"] = rid
         out.append((doc, rec))
+    return out[:limit] if limit else out
+
+
+def load_public_gold(limit: int | None = None) -> list[tuple[str, dict]]:
+    """Public human-annotated gold set as `(document_text, gold_record)`.
+
+    Returns text rather than a path: the source corpus stores each résumé as a
+    flattened single line, so the caller segments it (`segment_corpus_text`)
+    before ingest — writing it to disk first would only add a temp file.
+
+    Labelled fields are `skills`, `work_titles`, `institutions`, `degrees`,
+    `certifications`. See `eval/datasets/fetch_public.py` for provenance of the
+    data and its limitations.
+    """
+    path = PUBLIC_DIR / "gold_public.json"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"no public gold set at {path}. Build it with: "
+            f"python -m eval.datasets.fetch_public --n 150"
+        )
+    items = json.loads(path.read_text())["items"]
+    out = []
+    for it in items:
+        gold = dict(it["gold"])
+        gold["gold_prov_values"] = it.get("gold_prov_values", {})
+        gold["id"] = it["digest"][:8]
+        out.append((it["text"], gold))
     return out[:limit] if limit else out
 
 

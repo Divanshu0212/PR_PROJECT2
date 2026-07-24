@@ -9,7 +9,12 @@ finished run, which is the failure mode Phase 5 called out explicitly.
 
 import pytest
 
-from eval.datasets import load_fabrication_pairs, load_gold, load_real_gold
+from eval.datasets import (
+    load_fabrication_pairs,
+    load_gold,
+    load_public_gold,
+    load_real_gold,
+)
 from rho.models.provenance import ProvenanceMap
 from rho.models.resume import StructuredResume
 
@@ -68,3 +73,19 @@ def test_load_fabrication_pairs_shape():
     assert isinstance(first["resume"], StructuredResume)
     assert isinstance(first["prov"], ProvenanceMap)
     assert "gaps" in first
+
+
+def test_load_public_gold_returns_text_and_labels():
+    """The public set is the independently-annotated one (Table 1c)."""
+    items = load_public_gold()
+    assert len(items) == 150
+    text, gold = items[0]
+    assert isinstance(text, str) and len(text) > 500
+    assert gold["skills"], "public gold record has no skill labels"
+
+
+def test_load_public_gold_dedups_repeat_mentions():
+    """Skills are annotated at every mention; the metric wants the claim set."""
+    for _, gold in load_public_gold(limit=25):
+        lowered = [s.lower() for s in gold["skills"]]
+        assert len(lowered) == len(set(lowered))

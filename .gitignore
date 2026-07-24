@@ -13,3 +13,5 @@ eval/progress.json
 
 # Eval scratch outputs (datasets themselves ARE committed; caches are not)
 eval/**/__pycache__/
+# 19MB raw HF download; rebuilt by `python -m eval.datasets.fetch_public`
+eval/datasets/public/resume_ner_labelled.json

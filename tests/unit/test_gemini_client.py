@@ -1,0 +1,224 @@
+"""Gemini backend: key rotation, response parsing, pacing, quota handling.
+
+No network here. The transport is injected so behaviour is pinned
+deterministically; live reachability is exercised by the eval runs.
+"""
+
+import json
+
+import pytest
+
+from rho.llm.gemini import GeminiClient, QuotaExhausted, RateLimited, load_api_keys
+
+
+def test_load_api_keys_parses_json_array():
+    keys = load_api_keys('GEMINI_API_KEY=["a","b","c"]')
+    assert keys == ["a", "b", "c"]
+
+
+def test_load_api_keys_accepts_bare_single_key():
+    assert load_api_keys("GEMINI_API_KEY=solo") == ["solo"]
+
+
+def test_load_api_keys_errors_when_absent():
+    with pytest.raises(ValueError):
+        load_api_keys("SOMETHING_ELSE=1")
+
+
+def test_keys_rotate_round_robin():
+    client = GeminiClient(api_keys=["k1", "k2", "k3"], transport=lambda *a, **k: ({}, {}))
+    assert [client.next_key() for _ in range(4)] == ["k1", "k2", "k3", "k1"]
+
+
+def _body(text: str) -> dict:
+    return {"candidates": [{"content": {"parts": [{"text": text}]}}]}
+
+
+def test_complete_json_returns_parsed_payload():
+    def fake_transport(url, payload, timeout):
+        return _body('{"skills":["Go"]}'), {}
+
+    client = GeminiClient(api_keys=["k1"], transport=fake_transport)
+    assert client.complete_json("prompt") == {"skills": ["Go"]}
+
+
+def test_complete_json_ignores_leading_thought_parts():
+    """`thoughtSignature` parts precede the answer; the JSON is always last."""
+
+    def fake_transport(url, payload, timeout):
+        return {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {"text": "reasoning...", "thought": True},
+                            {"text": '{"ok":true}'},
+                        ]
+                    }
+                }
+            ]
+        }, {}
+
+    client = GeminiClient(api_keys=["k1"], transport=fake_transport)
+    assert client.complete_json("prompt") == {"ok": True}
+
+
+def test_complete_json_retries_on_failure_with_next_key():
+    calls = []
+
+    def flaky(url, payload, timeout):
+        calls.append(url)
+        if len(calls) == 1:
+            raise RuntimeError("network blip")
+        return _body('{"ok":true}'), {}
+
+    client = GeminiClient(api_keys=["k1", "k2"], transport=flaky, requests_per_minute=1000)
+    assert client.complete_json("prompt") == {"ok": True}
+    assert len(calls) == 2
+    assert "key=k1" in calls[0] and "key=k2" in calls[1]
+
+
+def test_complete_json_raises_after_exhausting_keys():
+    def always_fail(url, payload, timeout):
+        raise RuntimeError("boom")
+
+    client = GeminiClient(
+        api_keys=["k1", "k2"], transport=always_fail, rounds=1, backoff=0
+    )
+    with pytest.raises(RuntimeError):
+        client.complete_json("prompt")
+
+
+def test_rate_limited_key_waits_server_reset_before_retrying():
+    from rho.llm import gemini as mod
+
+    slept, calls = [], []
+
+    def limited_once(url, payload, timeout):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RateLimited(9.0, "429")
+        return _body('{"ok":true}'), {}
+
+    client = GeminiClient(api_keys=["k1"], transport=limited_once, max_wait=70)
+    original = mod.time.sleep
+    mod.time.sleep = slept.append
+    try:
+        assert client.complete_json("p") == {"ok": True}
+    finally:
+        mod.time.sleep = original
+    assert slept and 9.0 <= slept[0] <= 10.0
+
+
+def test_rate_limit_wait_is_capped():
+    from rho.llm import gemini as mod
+
+    slept = []
+
+    def always_limited(url, payload, timeout):
+        raise RateLimited(3600.0, "429")
+
+    client = GeminiClient(api_keys=["k1"], transport=always_limited, rounds=2, max_wait=70)
+    original = mod.time.sleep
+    mod.time.sleep = slept.append
+    try:
+        with pytest.raises(RuntimeError):
+            client.complete_json("p")
+    finally:
+        mod.time.sleep = original
+    assert all(s <= 71 for s in slept)
+
+
+def test_daily_quota_exhaustion_moves_to_next_key_not_retried():
+    """Unlike Groq's shared TPD, Gemini quota is per-key/per-project: rotate off
+    the exhausted key rather than aborting the whole call."""
+    calls = []
+
+    def key1_exhausted(url, payload, timeout):
+        calls.append(url)
+        if "key=k1" in url:
+            raise QuotaExhausted("RESOURCE_EXHAUSTED: quota exceeded per day")
+        return _body('{"ok":true}'), {}
+
+    client = GeminiClient(api_keys=["k1", "k2"], transport=key1_exhausted)
+    assert client.complete_json("p") == {"ok": True}
+    assert any("key=k2" in c for c in calls)
+
+
+def test_all_keys_exhausted_raises_quota_exhausted():
+    def always_exhausted(url, payload, timeout):
+        raise QuotaExhausted("RESOURCE_EXHAUSTED")
+
+    client = GeminiClient(api_keys=["k1", "k2"], transport=always_exhausted, rounds=1)
+    with pytest.raises(QuotaExhausted):
+        client.complete_json("p")
+
+
+def test_response_schema_is_sent_when_provided():
+    seen = {}
+
+    def capture(url, payload, timeout):
+        seen["config"] = payload["generationConfig"]
+        return _body("{}"), {}
+
+    client = GeminiClient(api_keys=["k1"], transport=capture)
+    schema = {"type": "OBJECT", "properties": {"a": {"type": "STRING"}}}
+    client.complete_json("p", response_schema=schema)
+    assert seen["config"]["responseSchema"] == schema
+    assert seen["config"]["responseMimeType"] == "application/json"
+
+
+# --- request pacing -------------------------------------------------------
+
+
+def test_pacer_allows_requests_within_limit():
+    from rho.llm.gemini import RequestPacer
+
+    clock = [0.0]
+    pacer = RequestPacer(requests_per_minute=10, now=lambda: clock[0])
+    assert pacer.acquire() == 0.0
+    assert pacer.acquire() == 0.0
+
+
+def test_pacer_waits_when_window_is_exhausted():
+    from rho.llm.gemini import RequestPacer
+
+    clock = [0.0]
+    pacer = RequestPacer(requests_per_minute=2, now=lambda: clock[0])
+    pacer.acquire()
+    pacer.acquire()
+    wait = pacer.acquire()
+    assert 0 < wait <= 60
+
+
+def test_pacer_frees_capacity_after_window_rolls():
+    from rho.llm.gemini import RequestPacer
+
+    clock = [0.0]
+    pacer = RequestPacer(requests_per_minute=2, now=lambda: clock[0])
+    pacer.acquire()
+    pacer.acquire()
+    clock[0] = 61.0
+    assert pacer.acquire() == 0.0
+
+
+def test_client_paces_before_sending():
+    """The client must wait before sending, not after being refused."""
+    clock, slept = [0.0], []
+
+    def ok(url, payload, timeout):
+        return _body('{"ok":true}'), {}
+
+    client = GeminiClient(api_keys=["k"], transport=ok, requests_per_minute=1)
+    client._pacers["k"]._now = lambda: clock[0]
+
+    import rho.llm.gemini as mod
+
+    original = mod.time.sleep
+    mod.time.sleep = slept.append
+    try:
+        client.complete_json("first")
+        assert client.complete_json("second") == {"ok": True}
+    finally:
+        mod.time.sleep = original
+    assert slept and slept[0] > 0

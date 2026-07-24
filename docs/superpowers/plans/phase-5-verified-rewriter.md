@@ -334,6 +334,37 @@ git add -A && git commit -m "feat: fabrication benchmark + gate ablation (C3)"
   cash handling`), and even a leaked prompt-reasoning artifact
   (`>// Emphasize content creation as it's closest to the target requirements…`). None reached output.
 
+### Gemini re-run — same 30 corpus pairs, `gemini-3.1-flash-lite`
+
+Same benchmark, same seed, same real Phase-3 gap path — only the rewriter (and JD-analysis feeding
+it) swapped to Gemini. `eval/fabrication_ablation.py --backend gemini --corpus 30 --seed 0`.
+
+| | qwen2.5:14b (Ollama) | Gemini (`gemini-3.1-flash-lite`) |
+|---|---|---|
+| Pairs scored / failed | 30 / 0 | **30 / 0** |
+| Unsourced shipped, gate-OFF | 31 | **40** |
+| Unsourced shipped, gate-ON | 0 | **0** |
+| Mean fabrication_rate | 0.407 | **0.248** |
+| Pairs with ≥1 fabrication | 14 / 30 | **10 / 30** |
+| Wall-clock | minutes (CPU, serial per pair) | **seconds** (5 concurrent workers, hosted) |
+
+**Gate-ON is 0 on both backends — the headline claim holds regardless of which model drives the
+rewriter**, which is the point: C3 is a property of the gate, not of the rewriter's honesty.
+Gemini's raw output is *more* prone to fabrication by absolute count (40 vs 31 unsourced additions)
+despite a lower mean rate over fewer affected pairs (0.248 over 30 vs 0.407 over 30, but concentrated
+in 10 pairs instead of 14) — a rewriter that fabricates harder on the pairs it does fabricate on,
+not a more honest one. Concrete examples the gate rejected (never reached output): invented skills
+(`Microsoft Word`, `Microsoft Excel`, `Microsoft Outlook`, `Project Management`, `Construction
+Practices`), invented soft-skill claims (`Team Leadership`, `Team Collaboration`, `Marketing Event
+Coordination`), and invented bullet-level claims (`Institutional kitchen operations`, `Performed
+tasks requiring basic math and numerical proficiency using 10-key`). Same shape of fabrication as
+the qwen run — invented skills and restated-as-fact soft skills — just more of it per affected pair.
+Artifact: `eval/fabrication_results_corpus_gemini.json`.
+
+The same model-selection detour recorded in Phase 4 applies here: `gemini-3.6-flash` (requested)
+has a 20 requests/day/project free tier, unrunnable for a 30-pair run needing 60 requests (JD
+analysis + rewrite per pair); `gemini-3.1-flash-lite` is the model that actually sustained it.
+
 ### Earlier run — `gemma3:4b` on the 12-pair synthetic fixture (retained for comparison)
 
 - **Fabrication benchmark size:** 12 adversarial pairs (`tests/fixtures/fabrication/pairs.json`).

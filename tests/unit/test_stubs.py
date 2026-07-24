@@ -52,7 +52,13 @@ def test_section_6_symbol_is_importable(module_path, attr):
 
 
 def test_remaining_stubs_raise_not_implemented():
-    """Whatever is still unimplemented must fail loudly, never return None."""
+    """Whatever is still unimplemented must fail loudly, never return None.
+
+    Phase 6 landed `run_pipeline`, the last Section-6 stub, so this now walks an
+    empty set and the `checked > 0` assertion is gone (as this file always said
+    it should be). It is kept rather than deleted: it still guards against a
+    regression that reintroduces a silently-returning stub.
+    """
     checked = 0
     for module_path, attr in SECTION_6:
         obj = _resolve(module_path, attr)
@@ -77,6 +83,4 @@ def test_remaining_stubs_raise_not_implemented():
             ]
             with pytest.raises(NotImplementedError):
                 fn(*args)
-    # Phases 4-6 are outstanding, so stubs must still exist. When the last one
-    # lands this flips and the assertion should simply be deleted.
-    assert checked > 0, "no stubs left — delete this test"
+    assert checked == 0, f"{checked} Section-6 stub(s) left after Phase 6"

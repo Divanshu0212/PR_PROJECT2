@@ -9,7 +9,9 @@ def test_health():
     assert client.get("/health").json() == {"status": "ok"}
 
 
-def test_optimize_returns_pipeline_shape():
+def test_optimize_returns_pipeline_shape(stub_nodes):
+    # /optimize now runs the real graph (P6), so the LLM-backed nodes are
+    # stubbed — this test asserts the response shape, not model behaviour.
     r = client.post(
         "/optimize",
         files={"file": ("r.txt", b"Alice\npython", "text/plain")},

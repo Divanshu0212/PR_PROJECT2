@@ -9,21 +9,16 @@ def test_health():
     assert client.get("/health").json() == {"status": "ok"}
 
 
-def test_optimize_returns_pipeline_shape(stub_nodes):
-    # /optimize now runs the real graph (P6), so the LLM-backed nodes are
-    # stubbed — this test asserts the response shape, not model behaviour.
+def test_optimize_returns_job_shape(stub_nodes):
+    # /optimize is now an async job endpoint (résumé is already structured by
+    # the time it's submitted) — this test asserts the response shape, not
+    # model behaviour. stub_nodes is kept even though this route no longer
+    # drives the LangGraph nodes directly, to preserve the fixture wiring.
     r = client.post(
         "/optimize",
-        files={"file": ("r.txt", b"Alice\npython", "text/plain")},
-        data={"jd_text": "need python"},
+        json={"resume": {"name": "Alice", "skills": ["python"]}, "jd_text": "need python"},
     )
     assert r.status_code == 200
     body = r.json()
-    for key in [
-        "structured_resume",
-        "provenance_map",
-        "match_result",
-        "tailored_resume",
-        "final_score",
-    ]:
-        assert key in body
+    assert "id" in body
+    assert body["state"] in ("queued", "running", "done")

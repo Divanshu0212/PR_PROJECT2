@@ -48,14 +48,22 @@ describe("resume store", () => {
     expect(useResumeStore.getState().style.fontSize).toBe(12);
   });
 
-  it("applyTailored swaps in tailored resume and records previous score", () => {
-    useResumeStore.getState().applyTailored(
-      { name: "Jane", work: [{ company: "Acme", title: "Eng", bullets: ["Built X in Python"] }], skills: ["python"], emails: [], phones: [], urls: [], education: [], certifications: [] } as any,
-      88, 60,
-    );
+  it("applyOptimize swaps in tailored resume, sets scores and components", () => {
+    useResumeStore.getState().applyOptimize({
+      tailored: { name: "Jane", work: [{ company: "Acme", title: "Eng", bullets: ["Built X in Python"] }], skills: ["python"], emails: [], phones: [], urls: [], education: [], projects: [], certifications: [] } as any,
+      displayScore: 88,
+      baselineDisplayScore: 60,
+      components: [{ label: "Keyword match", before: 0.5, after: 0.9 }],
+      gaps: [],
+      fabricationsBlocked: 2,
+      previousScore: 55,
+    });
     const s = useResumeStore.getState();
     expect(s.resume!.work[0].bullets[0]).toBe("Built X in Python");
     expect(s.optimize?.score).toBe(88);
-    expect(s.optimize?.previousScore).toBe(60);
+    expect(s.optimize?.baselineScore).toBe(60);
+    expect(s.optimize?.previousScore).toBe(55);
+    expect(s.optimize?.components[0].after).toBe(0.9);
+    expect(s.optimize?.fabricationsBlocked).toBe(2);
   });
 });

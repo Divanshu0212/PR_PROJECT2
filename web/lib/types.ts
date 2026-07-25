@@ -26,6 +26,13 @@ export interface Gap { requirement: { text: string; priority: string }; status: 
 export interface MatchResult { predicted_score: number; gaps: Gap[]; }
 export interface FabricationReport { total_edits: number; verified_edits: number; fabrication_rate: number; rejected_edits: { added_text: string; reason: string }[]; }
 export interface TailoredResume { resume: StructuredResume; fabrication_report: FabricationReport; }
-export interface OptimizeResult { match_result: MatchResult; tailored_resume: TailoredResume; final_score: number; previous_score?: number | null; }
+export interface ScoreComponent { label: string; before: number; after: number; }
+export interface OptimizeResult {
+  match_result: MatchResult; tailored_resume: TailoredResume;
+  final_score: number; display_score: number;
+  baseline_score?: number | null; baseline_display_score?: number | null;
+  components: ScoreComponent[];
+  previous_score?: number | null;
+}
 export type JobState = "queued" | "running" | "done" | "error";
 export interface JobStatus { id: string; state: JobState; stage?: string | null; result?: OptimizeResult | null; error?: string | null; }

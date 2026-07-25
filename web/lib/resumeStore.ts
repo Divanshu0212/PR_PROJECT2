@@ -7,6 +7,8 @@ export interface StyleSettings {
 }
 export interface OptimizeView {
   score: number; previousScore: number | null;
+  baselineScore: number | null; // this run's ORIGINAL-résumé score (before tailoring)
+  components: { label: string; before: number; after: number }[];
   gaps: { text: string; priority: string; status: string }[];
   fabricationsBlocked: number;
   originalResume: StructuredResume; // pre-optimize, for before/after
@@ -29,8 +31,15 @@ interface State {
   editProjectBullet: (projIdx: number, bulletIdx: number, text: string) => void;
   removeProjectBullet: (projIdx: number, bulletIdx: number) => void;
   setStyle: (patch: Partial<StyleSettings>) => void;
-  applyTailored: (tailored: StructuredResume, score: number, previousScore: number | null) => void;
-  setGaps: (gaps: OptimizeView["gaps"], fabricationsBlocked: number) => void;
+  applyOptimize: (view: {
+    tailored: StructuredResume;
+    displayScore: number;
+    baselineDisplayScore: number | null;
+    components: OptimizeView["components"];
+    gaps: OptimizeView["gaps"];
+    fabricationsBlocked: number;
+    previousScore: number | null;
+  }) => void;
 }
 
 const DEFAULT_STYLE: StyleSettings = {
@@ -74,17 +83,16 @@ export const useResumeStore = create<State>((set, get) => ({
   editProjectBullet: (pi, bi, text) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.projects[pi].bullets[bi] = text; }) })),
   removeProjectBullet: (pi, bi) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.projects[pi].bullets.splice(bi, 1); }) })),
   setStyle: (patch) => set((s) => ({ style: { ...s.style, ...patch } })),
-  applyTailored: (tailored, score, previousScore) => set((s) => ({
+  applyOptimize: (v) => set((s) => ({
     optimize: {
-      score, previousScore,
-      gaps: s.optimize?.gaps ?? [], fabricationsBlocked: s.optimize?.fabricationsBlocked ?? 0,
-      originalResume: s.resume!,
+      score: v.displayScore,
+      previousScore: v.previousScore,
+      baselineScore: v.baselineDisplayScore,
+      components: v.components,
+      gaps: v.gaps,
+      fabricationsBlocked: v.fabricationsBlocked,
+      originalResume: s.resume!, // the résumé that went in, for before/after
     },
-    resume: normalize(tailored),
-  })),
-  setGaps: (gaps, fabricationsBlocked) => set((s) => ({
-    optimize: s.optimize ? { ...s.optimize, gaps, fabricationsBlocked } : {
-      score: 0, previousScore: null, gaps, fabricationsBlocked, originalResume: s.resume!,
-    },
+    resume: normalize(v.tailored),
   })),
 }));

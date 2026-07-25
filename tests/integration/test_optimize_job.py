@@ -1,31 +1,31 @@
 from fastapi.testclient import TestClient
 
-import rho.api.app as appmod
 from rho.api.app import app
-from rho.models.api import PipelineResponse
+from rho.models.api import OptimizeResult, ScoreComponent
 from rho.models.resume import StructuredResume
-from rho.models.provenance import ProvenanceMap
 from rho.models.scoring import MatchResult, ComponentVector
 from rho.models.rewrite import TailoredResume, FabricationReport
 
 
-def _resp():
-    return PipelineResponse(
-        structured_resume=StructuredResume(name="X"),
-        provenance_map=ProvenanceMap(doc_id="d"),
+def _result():
+    return OptimizeResult(
         match_result=MatchResult(component_vector=ComponentVector(
-            keyword_coverage=0, semantic_similarity=0, fuzzy_coverage=0,
-            must_have_coverage=0, nice_have_coverage=0), predicted_score=80.0),
+            keyword_coverage=0.9, semantic_similarity=0.9, fuzzy_coverage=0,
+            must_have_coverage=0.9, nice_have_coverage=1.0), predicted_score=80.0),
         tailored_resume=TailoredResume(resume=StructuredResume(name="X"),
             fabrication_report=FabricationReport(total_edits=0, verified_edits=0, fabrication_rate=0.0)),
         final_score=80.0,
+        display_score=95.0,
+        baseline_score=60.0,
+        baseline_display_score=70.0,
+        components=[ScoreComponent(label="Keyword match", before=0.5, after=0.9)],
     )
 
 
 def test_optimize_job_lifecycle(monkeypatch):
-    # Replace the store's default runner path by patching run_from_structured.
-    monkeypatch.setattr("rho.api.jobs.run_from_structured",
-                        lambda resume, jd_text, on_stage=None: _resp())
+    # Patch the store's default runner path (run_optimize) with an LLM-free stub.
+    monkeypatch.setattr("rho.api.jobs.run_optimize",
+                        lambda resume, jd_text, on_stage=None: _result())
     client = TestClient(app)
     start = client.post("/optimize", json={"resume": {"name": "X"}, "jd_text": "jd"})
     assert start.status_code == 200
@@ -40,6 +40,9 @@ def test_optimize_job_lifecycle(monkeypatch):
     body = poll.json()
     assert body["state"] == "done"
     assert body["result"]["final_score"] == 80.0
+    assert body["result"]["display_score"] == 95.0
+    assert body["result"]["baseline_display_score"] == 70.0
+    assert body["result"]["components"][0]["label"] == "Keyword match"
 
 
 def test_optimize_unknown_job_404():

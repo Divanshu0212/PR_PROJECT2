@@ -6,7 +6,7 @@ import { useResumeStore } from "@/lib/resumeStore";
 export function JdBox() {
   const resume = useResumeStore((s) => s.resume);
   const optimize = useResumeStore((s) => s.optimize);
-  const { applyTailored, setGaps } = useResumeStore.getState();
+  const { applyOptimize } = useResumeStore.getState();
   const [jd, setJd] = useState("");
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
@@ -22,11 +22,15 @@ export function JdBox() {
         intervalMs: 1500, timeoutMs: 180000,
       });
       const r = done.result!;
-      applyTailored(r.tailored_resume.resume, r.final_score, prevScore);
-      setGaps(
-        r.match_result.gaps.map((g) => ({ text: g.requirement.text, priority: g.requirement.priority, status: g.status })),
-        r.tailored_resume.fabrication_report.rejected_edits.length,
-      );
+      applyOptimize({
+        tailored: r.tailored_resume.resume,
+        displayScore: r.display_score,
+        baselineDisplayScore: r.baseline_display_score ?? null,
+        components: r.components ?? [],
+        gaps: r.match_result.gaps.map((g) => ({ text: g.requirement.text, priority: g.requirement.priority, status: g.status })),
+        fabricationsBlocked: r.tailored_resume.fabrication_report.rejected_edits.length,
+        previousScore: prevScore,
+      });
     } catch (e) {
       setError(e instanceof BackendUnreachable
         ? "Backend unreachable. Start it: uvicorn rho.api.app:app --reload"
@@ -49,35 +53,61 @@ export function JdBox() {
         <p className="border-l-2 border-studio pl-2 text-sm text-studio">{error}</p>
       )}
       {optimize && !busy && (
-        <div className="space-y-2 rounded-sm border border-hairline bg-white/60 p-3">
+        <div className="space-y-3 rounded-sm border border-hairline bg-white/60 p-3">
           <div className="flex items-baseline gap-2">
-            <span className="font-label text-[11px] uppercase tracking-[0.1em] text-ink-muted">Score</span>
+            <span className="font-label text-[11px] uppercase tracking-[0.1em] text-ink-muted">Match score</span>
             <span className="text-2xl font-semibold text-ink">{optimize.score.toFixed(0)}</span>
             <span className="text-sm text-ink-muted">/100</span>
-            {optimize.previousScore !== null && (
+            {optimize.baselineScore !== null && optimize.baselineScore !== undefined && (
               <span className={`ml-1 rounded-sm px-1.5 py-0.5 font-label text-[11px] ${
-                optimize.score > optimize.previousScore
+                optimize.score > optimize.baselineScore
                   ? "bg-studio/10 text-studio"
-                  : optimize.score < optimize.previousScore
+                  : optimize.score < optimize.baselineScore
                   ? "bg-orange-100 text-orange-700"
                   : "bg-ink-muted/10 text-ink-muted"
               }`}>
-                {optimize.score > optimize.previousScore
-                  ? "▲"
-                  : optimize.score < optimize.previousScore
-                  ? "▼"
-                  : "="}{" "}
-                from {optimize.previousScore.toFixed(0)}
+                {optimize.score > optimize.baselineScore ? "▲" : optimize.score < optimize.baselineScore ? "▼" : "="}{" "}
+                {(optimize.score - optimize.baselineScore >= 0 ? "+" : "")}
+                {(optimize.score - optimize.baselineScore).toFixed(0)} from {optimize.baselineScore.toFixed(0)}
               </span>
             )}
           </div>
-          <div className="text-sm text-ink-muted">
+
+          {optimize.components.length > 0 && (
+            <div className="space-y-1.5 border-t border-hairline pt-2">
+              <span className="font-label text-[11px] uppercase tracking-[0.1em] text-ink-muted">Improvement breakdown</span>
+              {optimize.components.map((c) => {
+                const beforePct = Math.round(c.before * 100);
+                const afterPct = Math.round(c.after * 100);
+                const delta = afterPct - beforePct;
+                return (
+                  <div key={c.label} className="flex items-center gap-2 text-sm">
+                    <span className="w-40 shrink-0 text-ink-muted">{c.label}</span>
+                    <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-ink-muted/10">
+                      <div className="absolute inset-y-0 left-0 rounded-full bg-ink-muted/30" style={{ width: `${beforePct}%` }} />
+                      <div className="absolute inset-y-0 left-0 rounded-full bg-studio transition-all" style={{ width: `${afterPct}%` }} />
+                    </div>
+                    <span className="w-24 shrink-0 text-right tabular-nums text-ink">
+                      {beforePct}% → {afterPct}%
+                      {delta !== 0 && (
+                        <span className={delta > 0 ? "ml-1 text-studio" : "ml-1 text-orange-700"}>
+                          ({delta > 0 ? "+" : ""}{delta}%)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="border-t border-hairline pt-2 text-sm text-ink-muted">
             Unsourced edits blocked: <span className="text-ink">{optimize.fabricationsBlocked}</span>
             <span className="ml-1 text-xs">(fabrication gate)</span>
           </div>
           {optimize.gaps.length > 0 && (
-            <div className="border-t border-hairline pt-2 text-sm text-ink-muted">
-              Gaps: <span className="text-ink">{optimize.gaps.filter((g) => g.status !== "present").map((g) => g.text).join(", ")}</span>
+            <div className="text-sm text-ink-muted">
+              Still missing: <span className="text-ink">{optimize.gaps.filter((g) => g.status !== "present").map((g) => g.text).join(", ")}</span>
             </div>
           )}
         </div>

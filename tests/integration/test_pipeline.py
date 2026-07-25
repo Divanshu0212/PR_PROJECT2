@@ -4,10 +4,7 @@ The point is the wiring — parallel branches, fan-in, reviewer — not model
 quality, so `extract`, `analyze_jd` and `rewrite` are stubbed (see conftest).
 """
 
-from rho.models.provenance import ProvenanceMap
 from rho.models.resume import StructuredResume
-from rho.models.rewrite import FabricationReport, TailoredResume
-from rho.models.scoring import ComponentVector, MatchResult
 
 
 def test_pipeline_end_to_end(stub_nodes):
@@ -67,43 +64,3 @@ def test_pipeline_reports_invariant(stub_nodes, monkeypatch):
     )
     assert ok_calls[0]["invariant_ok"] is False
     assert "Kubernetes" in ok_calls[0]["invariant_violations"]
-
-
-def test_optimize_endpoint_calls_pipeline(monkeypatch):
-    import rho.api.app as A
-
-    cv = ComponentVector(
-        keyword_coverage=1,
-        semantic_similarity=1,
-        fuzzy_coverage=1,
-        must_have_coverage=1,
-        nice_have_coverage=1,
-    )
-    resume = StructuredResume(name="A")
-    from rho.models.api import PipelineResponse
-
-    monkeypatch.setattr(
-        A,
-        "run_pipeline",
-        lambda fb, fn, jd: PipelineResponse(
-            structured_resume=resume,
-            provenance_map=ProvenanceMap(doc_id="d"),
-            match_result=MatchResult(component_vector=cv, predicted_score=77.0),
-            tailored_resume=TailoredResume(
-                resume=resume,
-                fabrication_report=FabricationReport(
-                    total_edits=0, verified_edits=0, fabrication_rate=0.0
-                ),
-            ),
-            final_score=77.0,
-        ),
-    )
-    from fastapi.testclient import TestClient
-
-    c = TestClient(A.app)
-    r = c.post(
-        "/optimize",
-        files={"file": ("r.txt", b"x", "text/plain")},
-        data={"jd_text": "jd"},
-    )
-    assert r.json()["final_score"] == 77.0

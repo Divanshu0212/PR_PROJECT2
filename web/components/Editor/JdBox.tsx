@@ -55,8 +55,19 @@ export function JdBox() {
             <span className="text-2xl font-semibold text-ink">{optimize.score.toFixed(0)}</span>
             <span className="text-sm text-ink-muted">/100</span>
             {optimize.previousScore !== null && (
-              <span className="ml-1 rounded-sm bg-studio/10 px-1.5 py-0.5 font-label text-[11px] text-studio">
-                ▲ from {optimize.previousScore.toFixed(0)}
+              <span className={`ml-1 rounded-sm px-1.5 py-0.5 font-label text-[11px] ${
+                optimize.score > optimize.previousScore
+                  ? "bg-studio/10 text-studio"
+                  : optimize.score < optimize.previousScore
+                  ? "bg-orange-100 text-orange-700"
+                  : "bg-ink-muted/10 text-ink-muted"
+              }`}>
+                {optimize.score > optimize.previousScore
+                  ? "▲"
+                  : optimize.score < optimize.previousScore
+                  ? "▼"
+                  : "="}{" "}
+                from {optimize.previousScore.toFixed(0)}
               </span>
             )}
           </div>

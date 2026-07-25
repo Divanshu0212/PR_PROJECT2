@@ -14,8 +14,6 @@ LLM legs use the Gemini backend explicitly: `analyze_jd`/`rewrite` default to
 CUDA-only backends otherwise.
 """
 
-from pathlib import Path
-
 from rho.graph import nodes as N
 from rho.ingestion import ingest
 from rho.jd import analyze_jd

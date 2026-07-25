@@ -1,3 +1,22 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --ink: #1c1b19;
+  --ink-muted: #6b6862;
+  --paper: #f7f5f1;
+  --desk: #edebe5;
+  --hairline: #dcd9d1;
+  --studio: #b5482a;
+  --studio-dim: #b5482a1a;
+  --font-tool: ui-sans-serif, "Inter", system-ui, -apple-system, sans-serif;
+  --font-label: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  --font-sheet: ui-serif, Georgia, "Times New Roman", serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-tool);
+}

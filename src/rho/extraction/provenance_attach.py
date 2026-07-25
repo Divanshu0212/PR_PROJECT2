@@ -36,4 +36,9 @@ def attach_provenance(
     for e in r.education:
         e.institution_prov = find_prov(e.institution, prov, threshold)
         e.edu_prov = find_prov((e.degree or "") + " " + (e.field or ""), prov, threshold)
+    for p in r.projects:
+        p.name_prov = find_prov(p.name, prov, threshold)
+        p.url_prov = find_prov(p.url or "", prov, threshold)
+        p.tech_prov = [find_prov(t, prov, threshold) for t in p.tech]
+        p.bullet_prov = [find_prov(b, prov, threshold) for b in p.bullets]
     return r

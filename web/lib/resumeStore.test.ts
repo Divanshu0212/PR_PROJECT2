@@ -4,7 +4,9 @@ import { useResumeStore } from "./resumeStore";
 const base = () => ({
   name: "Jane", headline: null, summary: null, emails: [], phones: [], urls: [],
   work: [{ company: "Acme", title: "Eng", bullets: ["Built X"] }],
-  education: [], skills: ["python"], certifications: [],
+  education: [],
+  projects: [{ name: "CredVault", url: null, tech: ["Python"], bullets: ["Built auth"] }],
+  skills: ["python"], certifications: [],
 });
 
 beforeEach(() => useResumeStore.getState().setResume(base() as any));
@@ -22,6 +24,15 @@ describe("resume store", () => {
     expect(useResumeStore.getState().resume!.work[0].bullets[1]).toBe("Led Y");
     useResumeStore.getState().removeBullet(0, 0);
     expect(useResumeStore.getState().resume!.work[0].bullets).toEqual(["Led Y"]);
+  });
+
+  it("adds, edits and removes a bullet on a project entry", () => {
+    useResumeStore.getState().addProjectBullet(0);
+    expect(useResumeStore.getState().resume!.projects[0].bullets).toHaveLength(2);
+    useResumeStore.getState().editProjectBullet(0, 1, "Added caching");
+    expect(useResumeStore.getState().resume!.projects[0].bullets[1]).toBe("Added caching");
+    useResumeStore.getState().removeProjectBullet(0, 0);
+    expect(useResumeStore.getState().resume!.projects[0].bullets).toEqual(["Added caching"]);
   });
 
   it("adds and removes skills without duplicates", () => {

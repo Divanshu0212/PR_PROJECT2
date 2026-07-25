@@ -1,7 +1,7 @@
 """Phase 5 (C3): hard-content tokens + the provenance verification gate."""
 
 from rho.models.provenance import ProvenanceMap, SourceSpan
-from rho.models.resume import Education, StructuredResume, WorkExperience
+from rho.models.resume import Education, Project, StructuredResume, WorkExperience
 from rho.models.rewrite import TailoredResume
 from rho.rewrite import rewrite
 from rho.rewrite.tokens import hard_content_tokens
@@ -50,6 +50,54 @@ def test_hard_tokens_cover_education_and_dates():
     )
     values = {t[0] for t in hard_content_tokens(r)}
     assert {"2019", "2022", "MIT"} <= values
+
+
+def test_hard_tokens_cover_project_name_and_tech():
+    r = StructuredResume(
+        name="A",
+        projects=[Project(name="CredVault", tech=["Python", "Redis"], bullets=["Built X"])],
+    )
+    paths = {t[0]: t[1] for t in hard_content_tokens(r)}
+    assert paths["CredVault"] == "projects[0].name"
+    assert paths["Python"] == "projects[0].tech[0]"
+    assert paths["Redis"] == "projects[0].tech[1]"
+    # bullets are prose, checked by the bullet path, not tokenised here
+    assert "Built X" not in paths
+
+
+def test_verify_keeps_sourced_project_drops_fabricated():
+    source = StructuredResume(
+        name="Dana Whitfield",
+        projects=[Project(name="CredVault", tech=["Python"], bullets=["Built auth service"])],
+    )
+    tailored = StructuredResume(
+        name="Dana Whitfield",
+        projects=[
+            Project(name="CredVault", tech=["Python", "Kubernetes"], bullets=["Built auth service"]),
+            Project(name="Falconry Ledger", tech=["Go"], bullets=["Invented project"]),
+        ],
+    )
+    prov = _prov("Dana Whitfield", "CredVault", "Python", "Built auth service")
+    fixed, report = verify_against_source(tailored, source, prov)
+    assert [p.name for p in fixed.projects] == ["CredVault"]  # fabricated project dropped
+    assert fixed.projects[0].tech == ["Python"]  # invented tech reverted
+    rejected = {r.added_text for r in report.rejected_edits}
+    assert "Kubernetes" in rejected and "Falconry Ledger" in rejected
+
+
+def test_verify_keeps_rephrased_project_bullet():
+    source = StructuredResume(
+        name="Dana Whitfield",
+        projects=[Project(name="CredVault", tech=["Python"], bullets=["Built the authentication service in Python"])],
+    )
+    tailored = StructuredResume(
+        name="Dana Whitfield",
+        projects=[Project(name="CredVault", tech=["Python"], bullets=["Built authentication service using Python"])],
+    )
+    prov = _prov("Dana Whitfield", "CredVault", "Python", "Built the authentication service in Python")
+    fixed, report = verify_against_source(tailored, source, prov)
+    # a genuine rephrasing of a source project bullet survives the gate
+    assert len(fixed.projects[0].bullets) == 1
 
 
 def test_hard_tokens_skip_blank_values():

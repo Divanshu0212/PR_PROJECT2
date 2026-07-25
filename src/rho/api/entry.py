@@ -30,6 +30,8 @@ def build_prov_from_resume(resume: StructuredResume) -> ProvenanceMap:
         lines += [w.company, w.title, w.start_date or "", w.end_date or "", *w.bullets]
     for e in resume.education:
         lines += [e.institution, e.degree or "", e.field or "", e.end_year or ""]
+    for p in resume.projects:
+        lines += [p.name, p.url or "", *p.tech, *p.bullets]
     doc = "\n".join(ln.strip() for ln in lines if ln and ln.strip())
     _, prov = ingest(doc.encode(), "edited.txt")
     return prov

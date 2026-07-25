@@ -2,6 +2,7 @@
 import { UploadDropzone } from "@/components/UploadDropzone";
 import { FieldEditors } from "@/components/Editor/FieldEditors";
 import { WorkEditor } from "@/components/Editor/WorkEditor";
+import { ProjectsEditor } from "@/components/Editor/ProjectsEditor";
 import { SkillsEditor } from "@/components/Editor/SkillsEditor";
 import { StyleControls } from "@/components/Editor/StyleControls";
 import { JdBox } from "@/components/Editor/JdBox";
@@ -25,6 +26,7 @@ export default function Page() {
             <FieldEditors />
             <SkillsEditor />
             <WorkEditor />
+            <ProjectsEditor />
             <details className="group border-t border-hairline pt-3">
               <summary className="cursor-pointer list-none font-label text-[11px] uppercase tracking-[0.18em] text-ink-muted transition-colors hover:text-studio">
                 Styling <span className="ml-1 inline-block transition-transform group-open:rotate-90">›</span>

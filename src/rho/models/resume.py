@@ -13,6 +13,17 @@ class WorkExperience(BaseModel):
     bullet_prov: list[list[str]] = []  # per-bullet
 
 
+class Project(BaseModel):
+    name: str
+    name_prov: list[str] = []
+    url: str | None = None
+    url_prov: list[str] = []
+    tech: list[str] = []
+    tech_prov: list[list[str]] = []  # per-tech, like skills_prov
+    bullets: list[str] = []
+    bullet_prov: list[list[str]] = []  # per-bullet, like work
+
+
 class Education(BaseModel):
     institution: str
     institution_prov: list[str] = []
@@ -33,6 +44,7 @@ class StructuredResume(BaseModel):
     contact_prov: list[str] = []
     work: list[WorkExperience] = []
     education: list[Education] = []
+    projects: list[Project] = []
     skills: list[str] = []
     skills_prov: list[list[str]] = []
     certifications: list[str] = []

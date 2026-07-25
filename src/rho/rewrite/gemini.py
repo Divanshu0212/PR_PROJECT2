@@ -7,7 +7,13 @@ The prompt is still not the safety mechanism. Truthfulness is enforced downstrea
 by `rho.rewrite.verifier`, which is deterministic and LLM-free.
 """
 
-from rho.extraction.schema import EduItem, ExtractionSchema, WorkItem, to_structured
+from rho.extraction.schema import (
+    EduItem,
+    ExtractionSchema,
+    ProjectItem,
+    WorkItem,
+    to_structured,
+)
 from rho.llm.gemini import GeminiClient
 from rho.models.resume import StructuredResume
 from rho.models.scoring import Gap
@@ -71,10 +77,23 @@ _SCHEMA = {
                 "required": ["institution"],
             },
         },
+        "projects": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "name": {"type": "STRING"},
+                    "url": {"type": "STRING", "nullable": True},
+                    "tech": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    "bullets": {"type": "ARRAY", "items": {"type": "STRING"}},
+                },
+                "required": ["name"],
+            },
+        },
         "skills": {"type": "ARRAY", "items": {"type": "STRING"}},
         "certifications": {"type": "ARRAY", "items": {"type": "STRING"}},
     },
-    "required": ["reasoning", "name", "work", "education", "skills"],
+    "required": ["reasoning", "name", "work", "education", "projects", "skills"],
 }
 
 _client: GeminiClient | None = None
@@ -104,6 +123,14 @@ def _source_json(resume: StructuredResume) -> str:
                 }
             },
             "education": {"__all__": {"institution_prov": True, "edu_prov": True}},
+            "projects": {
+                "__all__": {
+                    "name_prov": True,
+                    "url_prov": True,
+                    "tech_prov": True,
+                    "bullet_prov": True,
+                }
+            },
         },
     )
 
@@ -129,6 +156,12 @@ def _coerce(data: dict) -> ExtractionSchema:
             education.append(EduItem(**item))
         except Exception:
             continue
+    projects = []
+    for item in data.get("projects") or []:
+        try:
+            projects.append(ProjectItem(**item))
+        except Exception:
+            continue
     as_str = lambda xs: [str(x) for x in (xs or []) if str(x).strip()]  # noqa: E731
     return ExtractionSchema(
         reasoning=data.get("reasoning") or "",
@@ -140,6 +173,7 @@ def _coerce(data: dict) -> ExtractionSchema:
         urls=as_str(data.get("urls")),
         work=work,
         education=education,
+        projects=projects,
         skills=as_str(data.get("skills")),
         certifications=as_str(data.get("certifications")),
     )

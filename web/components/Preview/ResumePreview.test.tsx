@@ -26,4 +26,16 @@ describe("ResumePreview", () => {
     expect(screen.getByText("Built X")).toBeDefined();
     expect(screen.getByText(/Built X in Python/)).toBeDefined();
   });
+
+  it("renders a projects section with name, tech and bullets", () => {
+    const withProjects = {
+      ...resume,
+      projects: [{ name: "CredVault", url: "https://x", tech: ["Python", "Redis"], bullets: ["Built auth handling 2TB/day"] }],
+    };
+    const styleWithProjects = { ...style, sectionOrder: ["summary", "skills", "work", "projects", "education"] };
+    render(<ResumePreview resume={withProjects as any} style={styleWithProjects as any} optimize={null} />);
+    expect(screen.getByText("CredVault")).toBeDefined();
+    expect(screen.getByText("Python, Redis")).toBeDefined();
+    expect(screen.getByText(/Built auth handling 2TB\/day/)).toBeDefined();
+  });
 });

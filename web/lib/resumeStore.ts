@@ -25,6 +25,9 @@ interface State {
   removeBullet: (workIdx: number, bulletIdx: number) => void;
   addSkill: (s: string) => void;
   removeSkill: (s: string) => void;
+  addProjectBullet: (projIdx: number) => void;
+  editProjectBullet: (projIdx: number, bulletIdx: number, text: string) => void;
+  removeProjectBullet: (projIdx: number, bulletIdx: number) => void;
   setStyle: (patch: Partial<StyleSettings>) => void;
   applyTailored: (tailored: StructuredResume, score: number, previousScore: number | null) => void;
   setGaps: (gaps: OptimizeView["gaps"], fabricationsBlocked: number) => void;
@@ -32,7 +35,7 @@ interface State {
 
 const DEFAULT_STYLE: StyleSettings = {
   fontSize: 14, margin: 48, lineSpacing: 1.4, accent: "#2563eb",
-  sectionOrder: ["summary", "skills", "work", "education"],
+  sectionOrder: ["summary", "skills", "work", "projects", "education"],
 };
 
 function mutate(r: StructuredResume, fn: (draft: StructuredResume) => void): StructuredResume {
@@ -51,6 +54,9 @@ export const useResumeStore = create<State>((set, get) => ({
   removeBullet: (wi, bi) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.work[wi].bullets.splice(bi, 1); }) })),
   addSkill: (skill) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { if (!d.skills.map((x) => x.toLowerCase()).includes(skill.toLowerCase())) d.skills.push(skill); }) })),
   removeSkill: (skill) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.skills = d.skills.filter((x) => x.toLowerCase() !== skill.toLowerCase()); }) })),
+  addProjectBullet: (pi) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.projects[pi].bullets.push(""); }) })),
+  editProjectBullet: (pi, bi, text) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.projects[pi].bullets[bi] = text; }) })),
+  removeProjectBullet: (pi, bi) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.projects[pi].bullets.splice(bi, 1); }) })),
   setStyle: (patch) => set((s) => ({ style: { ...s.style, ...patch } })),
   applyTailored: (tailored, score, previousScore) => set((s) => ({
     optimize: {

@@ -9,7 +9,13 @@ The prompt is still not the safety mechanism. Truthfulness is enforced downstrea
 by `rho.rewrite.verifier`, which is deterministic and LLM-free.
 """
 
-from rho.extraction.schema import EduItem, ExtractionSchema, WorkItem, to_structured
+from rho.extraction.schema import (
+    EduItem,
+    ExtractionSchema,
+    ProjectItem,
+    WorkItem,
+    to_structured,
+)
 from rho.llm.groq import GroqClient, shared_budget
 from rho.models.resume import StructuredResume
 from rho.models.scoring import Gap
@@ -30,6 +36,7 @@ Return ONLY a JSON object of this shape, with no commentary:
              "end_date": null, "bullets": ["..."]}}],
   "education": [{{"institution": "...", "degree": null, "field": null,
                   "end_year": null}}],
+  "projects": [{{"name": "...", "url": null, "tech": ["..."], "bullets": ["..."]}}],
   "skills": ["..."], "certifications": ["..."]}}
 
 MASTER RÉSUMÉ (JSON):
@@ -71,6 +78,14 @@ def _source_json(resume: StructuredResume) -> str:
                 }
             },
             "education": {"__all__": {"institution_prov": True, "edu_prov": True}},
+            "projects": {
+                "__all__": {
+                    "name_prov": True,
+                    "url_prov": True,
+                    "tech_prov": True,
+                    "bullet_prov": True,
+                }
+            },
         },
     )
 
@@ -96,6 +111,12 @@ def _coerce(data: dict) -> ExtractionSchema:
             education.append(EduItem(**item))
         except Exception:
             continue
+    projects = []
+    for item in data.get("projects") or []:
+        try:
+            projects.append(ProjectItem(**item))
+        except Exception:
+            continue
     as_str = lambda xs: [str(x) for x in (xs or []) if str(x).strip()]  # noqa: E731
     return ExtractionSchema(
         reasoning=data.get("reasoning") or "",
@@ -107,6 +128,7 @@ def _coerce(data: dict) -> ExtractionSchema:
         urls=as_str(data.get("urls")),
         work=work,
         education=education,
+        projects=projects,
         skills=as_str(data.get("skills")),
         certifications=as_str(data.get("certifications")),
     )

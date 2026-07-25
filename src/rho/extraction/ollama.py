@@ -71,14 +71,27 @@ _FORMAT = {
                 "required": ["institution"],
             },
         },
+        "projects": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "url": {"type": ["string", "null"]},
+                    "tech": {"type": "array", "items": {"type": "string"}},
+                    "bullets": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["name"],
+            },
+        },
         "skills": {"type": "array", "items": {"type": "string"}},
         "certifications": {"type": "array", "items": {"type": "string"}},
     },
-    # work/education/skills are required so the decoder must emit the arrays.
-    # Left optional, qwen2.5:14b closes the object after `certifications` and
-    # drops the entire work history — a silent fill by omission, which reads
-    # identically to a résumé that genuinely has no jobs.
-    "required": ["reasoning", "name", "work", "education", "skills"],
+    # work/education/projects/skills are required so the decoder must emit the
+    # arrays. Left optional, qwen2.5:14b closes the object after `certifications`
+    # and drops the entire section — a silent fill by omission, which reads
+    # identically to a résumé that genuinely has no such entries.
+    "required": ["reasoning", "name", "work", "education", "projects", "skills"],
 }
 
 # Résumés are long and CPU inference is slow; generous on purpose.

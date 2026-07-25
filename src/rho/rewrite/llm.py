@@ -80,6 +80,19 @@ _FORMAT = {
                 "required": ["institution"],
             },
         },
+        "projects": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "url": {"type": ["string", "null"]},
+                    "tech": {"type": "array", "items": {"type": "string"}},
+                    "bullets": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["name"],
+            },
+        },
         "skills": {"type": "array", "items": {"type": "string"}},
         "certifications": {"type": "array", "items": {"type": "string"}},
     },
@@ -107,6 +120,14 @@ def _source_json(resume: StructuredResume) -> str:
                 }
             },
             "education": {"__all__": {"institution_prov": True, "edu_prov": True}},
+            "projects": {
+                "__all__": {
+                    "name_prov": True,
+                    "url_prov": True,
+                    "tech_prov": True,
+                    "bullet_prov": True,
+                }
+            },
         },
     )
 

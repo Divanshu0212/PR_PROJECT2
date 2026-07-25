@@ -62,10 +62,26 @@ _SCHEMA = {
                 "required": ["institution"],
             },
         },
+        "projects": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "name": {"type": "STRING"},
+                    "url": {"type": "STRING", "nullable": True},
+                    "tech": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    "bullets": {"type": "ARRAY", "items": {"type": "STRING"}},
+                },
+                "required": ["name"],
+            },
+        },
         "skills": {"type": "ARRAY", "items": {"type": "STRING"}},
         "certifications": {"type": "ARRAY", "items": {"type": "STRING"}},
     },
-    "required": ["reasoning", "name", "work", "education", "skills"],
+    # projects required so the decoder emits the array (empty if none) rather
+    # than closing the object early and dropping the section — same reason
+    # work/education are required.
+    "required": ["reasoning", "name", "work", "education", "projects", "skills"],
 }
 
 _client: GeminiClient | None = None

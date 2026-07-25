@@ -29,4 +29,8 @@ def hard_content_tokens(resume: StructuredResume) -> list[HardToken]:
         toks.append((e.institution, f"education[{ei}].institution"))
         if e.end_year:
             toks.append((e.end_year, f"education[{ei}].end_year"))
+    for pi, p in enumerate(resume.projects):
+        toks.append((p.name, f"projects[{pi}].name"))
+        for ti, t in enumerate(p.tech):
+            toks.append((t, f"projects[{pi}].tech[{ti}]"))
     return [(v, p) for (v, p) in toks if v and v.strip()]

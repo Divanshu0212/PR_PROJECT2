@@ -81,6 +81,8 @@ class _Ledger:
         self._src_values = {v.lower() for v, _ in hard_content_tokens(source)}
         self._src_bullets = [
             b.strip().lower() for w in source.work for b in w.bullets if b.strip()
+        ] + [
+            b.strip().lower() for p in source.projects for b in p.bullets if b.strip()
         ]
         # Stems of every word the source states anywhere — a bullet may
         # legitimately pull a term from the skills list or a job title.
@@ -221,5 +223,18 @@ def verify_against_source(
         if ledger.accept(e.institution):
             kept_edu.append(e)
     fixed.education = kept_edu
+
+    kept_projects = []
+    for p in fixed.projects:
+        # A project name with no provenance is a fabricated project; drop the
+        # whole entry rather than ship a real-looking shell.
+        if not ledger.accept(p.name):
+            continue
+        p.tech, p.tech_prov = _keep_supported(p.tech, p.tech_prov, ledger.accept)
+        p.bullets, p.bullet_prov = _keep_supported(
+            p.bullets, p.bullet_prov, ledger.accept_bullet
+        )
+        kept_projects.append(p)
+    fixed.projects = kept_projects
 
     return fixed, ledger.report()

@@ -8,10 +8,16 @@ export interface WorkExperience {
 export interface Education {
   institution: string; degree?: string | null; field?: string | null; end_year?: string | null;
 }
+export interface Project {
+  name: string; url?: string | null;
+  tech: string[]; bullets: string[];
+  tech_prov?: string[][]; bullet_prov?: string[][];
+}
 export interface StructuredResume {
   name: string; headline?: string | null; summary?: string | null;
   emails: string[]; phones: string[]; urls: string[];
   work: WorkExperience[]; education: Education[];
+  projects: Project[];
   skills: string[]; certifications: string[];
   skills_prov?: string[][];
 }

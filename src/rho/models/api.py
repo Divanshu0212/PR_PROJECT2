@@ -34,10 +34,22 @@ class OptimizeJobRequest(BaseModel):
     jd_text: str
 
 
+class ScoreComponent(BaseModel):
+    """One before/after component pair, for the UI's improvement breakdown."""
+
+    label: str
+    before: float  # 0..1
+    after: float  # 0..1
+
+
 class OptimizeResult(BaseModel):
     match_result: MatchResult
     tailored_resume: TailoredResume
-    final_score: float
+    final_score: float  # calibrated proxy (research value)
+    display_score: float = 0.0  # final_score rescaled to a readable 0..100
+    baseline_score: float | None = None  # calibrated score of the ORIGINAL résumé
+    baseline_display_score: float | None = None  # its rescaled 0..100
+    components: list[ScoreComponent] = []  # before/after per matching signal
     previous_score: float | None = None
 
 

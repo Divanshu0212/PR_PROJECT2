@@ -7,6 +7,11 @@ function bulletBefore(original: StructuredResume | undefined, wi: number, bi: nu
   return b !== undefined ? b : null;
 }
 
+function projectBulletBefore(original: StructuredResume | undefined, pi: number, bi: number): string | null {
+  const b = original?.projects?.[pi]?.bullets?.[bi];
+  return b !== undefined ? b : null;
+}
+
 export function ResumePreview({ resume, style, optimize }: {
   resume: StructuredResume; style: StyleSettings; optimize: OptimizeView | null;
 }) {
@@ -49,6 +54,29 @@ export function ResumePreview({ resume, style, optimize }: {
         if (section === "education" && resume.education.length)
           return <section key="education"><h2 className="mt-4 font-semibold uppercase text-sm text-[color:var(--accent)]">Education</h2>
             {resume.education.map((e, ei) => <div key={ei}>{e.institution}{e.degree ? ` — ${e.degree}` : ""}{e.field ? `, ${e.field}` : ""}{e.end_year ? ` (${e.end_year})` : ""}</div>)}</section>;
+        if (section === "projects" && resume.projects?.length)
+          return <section key="projects"><h2 className="mt-4 font-semibold uppercase text-sm text-[color:var(--accent)]">Projects</h2>
+            {resume.projects.map((p, pi) => (
+              <div key={pi} className="mt-2">
+                <div className="flex justify-between gap-2">
+                  <strong>{p.name}</strong>
+                  {p.url && <a href={p.url} className="text-[color:var(--accent)] underline" target="_blank" rel="noreferrer">link</a>}
+                </div>
+                {p.tech.length > 0 && <div className="text-sm italic text-neutral-600">{p.tech.join(", ")}</div>}
+                <ul className="list-disc pl-5">
+                  {p.bullets.map((b, bi) => {
+                    const before = optimize ? projectBulletBefore(optimize.originalResume, pi, bi) : null;
+                    const changed = before !== null && before !== b;
+                    return (
+                      <li key={bi}>
+                        {changed && <span className="mr-1 text-neutral-400 line-through">{before}</span>}
+                        <span>{b}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}</section>;
         return null;
       })}
     </article>

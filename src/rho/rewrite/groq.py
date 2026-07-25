@@ -9,14 +9,25 @@ The prompt is still not the safety mechanism. Truthfulness is enforced downstrea
 by `rho.rewrite.verifier`, which is deterministic and LLM-free.
 """
 
-from rho.extraction.schema import EduItem, ExtractionSchema, WorkItem, to_structured
+from rho.extraction.schema import (
+    EduItem,
+    ExtractionSchema,
+    ProjectItem,
+    WorkItem,
+    to_structured,
+)
 from rho.llm.groq import GroqClient, shared_budget
 from rho.models.resume import StructuredResume
 from rho.models.scoring import Gap
 
 _PROMPT = """You tailor a résumé toward a job's requirements. Rules:
 - The MASTER RÉSUMÉ below is the ONLY source of truth.
-- You MAY reorder, rephrase, select, and emphasize existing content.
+- You MAY reorder and rephrase existing content, and emphasize the parts most
+  relevant to the target requirements.
+- Return EVERY work entry and project, and KEEP ALL of each one's bullets —
+  rephrased and re-emphasized, but never dropped. Fewer bullets out than in is
+  WRONG; rephrase a less-relevant bullet, do not delete it.
+- Keep every skill; you may reorder so the job's terms come first.
 - You MUST NOT invent skills, tools, employers, titles, metrics, dates, or
   certifications. If the résumé does not claim it, it does not go in.
 - If a target requirement cannot be satisfied truthfully, leave it unsatisfied.
@@ -30,6 +41,7 @@ Return ONLY a JSON object of this shape, with no commentary:
              "end_date": null, "bullets": ["..."]}}],
   "education": [{{"institution": "...", "degree": null, "field": null,
                   "end_year": null}}],
+  "projects": [{{"name": "...", "url": null, "tech": ["..."], "bullets": ["..."]}}],
   "skills": ["..."], "certifications": ["..."]}}
 
 MASTER RÉSUMÉ (JSON):
@@ -71,6 +83,14 @@ def _source_json(resume: StructuredResume) -> str:
                 }
             },
             "education": {"__all__": {"institution_prov": True, "edu_prov": True}},
+            "projects": {
+                "__all__": {
+                    "name_prov": True,
+                    "url_prov": True,
+                    "tech_prov": True,
+                    "bullet_prov": True,
+                }
+            },
         },
     )
 
@@ -96,6 +116,12 @@ def _coerce(data: dict) -> ExtractionSchema:
             education.append(EduItem(**item))
         except Exception:
             continue
+    projects = []
+    for item in data.get("projects") or []:
+        try:
+            projects.append(ProjectItem(**item))
+        except Exception:
+            continue
     as_str = lambda xs: [str(x) for x in (xs or []) if str(x).strip()]  # noqa: E731
     return ExtractionSchema(
         reasoning=data.get("reasoning") or "",
@@ -107,6 +133,7 @@ def _coerce(data: dict) -> ExtractionSchema:
         urls=as_str(data.get("urls")),
         work=work,
         education=education,
+        projects=projects,
         skills=as_str(data.get("skills")),
         certifications=as_str(data.get("certifications")),
     )

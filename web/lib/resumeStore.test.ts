@@ -4,7 +4,9 @@ import { useResumeStore } from "./resumeStore";
 const base = () => ({
   name: "Jane", headline: null, summary: null, emails: [], phones: [], urls: [],
   work: [{ company: "Acme", title: "Eng", bullets: ["Built X"] }],
-  education: [], skills: ["python"], certifications: [],
+  education: [],
+  projects: [{ name: "CredVault", url: null, tech: ["Python"], bullets: ["Built auth"] }],
+  skills: ["python"], certifications: [],
 });
 
 beforeEach(() => useResumeStore.getState().setResume(base() as any));
@@ -24,6 +26,15 @@ describe("resume store", () => {
     expect(useResumeStore.getState().resume!.work[0].bullets).toEqual(["Led Y"]);
   });
 
+  it("adds, edits and removes a bullet on a project entry", () => {
+    useResumeStore.getState().addProjectBullet(0);
+    expect(useResumeStore.getState().resume!.projects[0].bullets).toHaveLength(2);
+    useResumeStore.getState().editProjectBullet(0, 1, "Added caching");
+    expect(useResumeStore.getState().resume!.projects[0].bullets[1]).toBe("Added caching");
+    useResumeStore.getState().removeProjectBullet(0, 0);
+    expect(useResumeStore.getState().resume!.projects[0].bullets).toEqual(["Added caching"]);
+  });
+
   it("adds and removes skills without duplicates", () => {
     useResumeStore.getState().addSkill("python"); // dup ignored
     useResumeStore.getState().addSkill("aws");
@@ -37,14 +48,22 @@ describe("resume store", () => {
     expect(useResumeStore.getState().style.fontSize).toBe(12);
   });
 
-  it("applyTailored swaps in tailored resume and records previous score", () => {
-    useResumeStore.getState().applyTailored(
-      { name: "Jane", work: [{ company: "Acme", title: "Eng", bullets: ["Built X in Python"] }], skills: ["python"], emails: [], phones: [], urls: [], education: [], certifications: [] } as any,
-      88, 60,
-    );
+  it("applyOptimize swaps in tailored resume, sets scores and components", () => {
+    useResumeStore.getState().applyOptimize({
+      tailored: { name: "Jane", work: [{ company: "Acme", title: "Eng", bullets: ["Built X in Python"] }], skills: ["python"], emails: [], phones: [], urls: [], education: [], projects: [], certifications: [] } as any,
+      displayScore: 88,
+      baselineDisplayScore: 60,
+      components: [{ label: "Keyword match", before: 0.5, after: 0.9 }],
+      gaps: [],
+      fabricationsBlocked: 2,
+      previousScore: 55,
+    });
     const s = useResumeStore.getState();
     expect(s.resume!.work[0].bullets[0]).toBe("Built X in Python");
     expect(s.optimize?.score).toBe(88);
-    expect(s.optimize?.previousScore).toBe(60);
+    expect(s.optimize?.baselineScore).toBe(60);
+    expect(s.optimize?.previousScore).toBe(55);
+    expect(s.optimize?.components[0].after).toBe(0.9);
+    expect(s.optimize?.fabricationsBlocked).toBe(2);
   });
 });

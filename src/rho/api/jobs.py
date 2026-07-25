@@ -9,12 +9,12 @@ an LLM.
 import threading
 import uuid
 
-from rho.api.entry import run_from_structured
+from rho.api.entry import run_optimize
 from rho.models.api import JobStatus, OptimizeJobRequest, OptimizeResult
 
 
-def _default_runner(req: OptimizeJobRequest, on_stage):
-    return run_from_structured(req.resume, req.jd_text, on_stage=on_stage)
+def _default_runner(req: OptimizeJobRequest, on_stage) -> OptimizeResult:
+    return run_optimize(req.resume, req.jd_text, on_stage=on_stage)
 
 
 class JobStore:
@@ -41,12 +41,7 @@ class JobStore:
     def _run(self, job_id: str, req: OptimizeJobRequest, runner) -> None:
         self._set(job_id, state="running")
         try:
-            resp = runner(req, lambda name: self._set(job_id, stage=name))
-            result = OptimizeResult(
-                match_result=resp.match_result,
-                tailored_resume=resp.tailored_resume,
-                final_score=resp.final_score,
-            )
+            result = runner(req, lambda name: self._set(job_id, stage=name))
             self._set(job_id, state="done", stage="done", result=result)
         except Exception as exc:  # a dead model must not look like a clean run
             self._set(job_id, state="error", error=f"{type(exc).__name__}: {exc}")

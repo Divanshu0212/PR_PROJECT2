@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from rho.models.resume import Education, StructuredResume, WorkExperience
+from rho.models.resume import Education, Project, StructuredResume, WorkExperience
 
 
 class WorkItem(BaseModel):
@@ -8,6 +8,13 @@ class WorkItem(BaseModel):
     title: str
     start_date: str | None = None
     end_date: str | None = None
+    bullets: list[str] = []
+
+
+class ProjectItem(BaseModel):
+    name: str
+    url: str | None = None
+    tech: list[str] = []
     bullets: list[str] = []
 
 
@@ -28,6 +35,7 @@ class ExtractionSchema(BaseModel):
     urls: list[str] = []
     work: list[WorkItem] = []
     education: list[EduItem] = []
+    projects: list[ProjectItem] = []
     skills: list[str] = []
     certifications: list[str] = []
 
@@ -58,6 +66,15 @@ def to_structured(es: ExtractionSchema) -> StructuredResume:
                 end_year=e.end_year,
             )
             for e in es.education
+        ],
+        projects=[
+            Project(
+                name=p.name,
+                url=p.url,
+                tech=p.tech,
+                bullets=p.bullets,
+            )
+            for p in es.projects
         ],
         skills=es.skills,
         certifications=es.certifications,

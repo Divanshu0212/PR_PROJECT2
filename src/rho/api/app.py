@@ -1,3 +1,7 @@
+import logging
+import threading
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,7 +10,40 @@ from rho.extraction import extract
 from rho.ingestion import ingest
 from rho.models.api import JobStatus, OptimizeJobRequest, ParseResponse
 
-app = FastAPI(title="rho")
+logger = logging.getLogger(__name__)
+
+
+def _warm_models() -> None:
+    """Load the heavy model weights once, so no request pays that cost.
+
+    Docling's converter and the sentence-transformers embedder both loaded their
+    weights lazily on first use — and Docling rebuilt the converter per call, so
+    every PDF ingest reloaded them. Warming here loads each once at boot.
+    """
+    try:
+        from rho.ingestion.docling_adapter import warm_up
+
+        warm_up()
+    except Exception as exc:  # a warm-up failure must not down the server
+        logger.warning("Docling warm-up skipped: %s", exc)
+    try:
+        from rho.matching.embed import Embedder
+
+        Embedder().encode(["warm up"])
+    except Exception as exc:
+        logger.warning("embedder warm-up skipped: %s", exc)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Warm in a background thread so the server accepts connections immediately;
+    # the first heavy request waits on the same cached models rather than
+    # triggering a second load.
+    threading.Thread(target=_warm_models, daemon=True).start()
+    yield
+
+
+app = FastAPI(title="rho", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],

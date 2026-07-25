@@ -1,23 +1,21 @@
 import time
 
 from rho.api.jobs import JobStore
-from rho.models.api import OptimizeJobRequest, PipelineResponse
+from rho.models.api import OptimizeJobRequest, OptimizeResult
 from rho.models.resume import StructuredResume
 from rho.models.scoring import MatchResult, ComponentVector
 from rho.models.rewrite import TailoredResume, FabricationReport
-from rho.models.provenance import ProvenanceMap
 
 
 def _fake_response():
-    return PipelineResponse(
-        structured_resume=StructuredResume(name="X"),
-        provenance_map=ProvenanceMap(doc_id="d"),
+    return OptimizeResult(
         match_result=MatchResult(component_vector=ComponentVector(
             keyword_coverage=0, semantic_similarity=0, fuzzy_coverage=0,
             must_have_coverage=0, nice_have_coverage=0), predicted_score=70.0),
         tailored_resume=TailoredResume(resume=StructuredResume(name="X"),
             fabrication_report=FabricationReport(total_edits=0, verified_edits=0, fabrication_rate=0.0)),
         final_score=70.0,
+        display_score=100.0,
     )
 
 

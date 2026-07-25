@@ -20,7 +20,14 @@ from rho.models.scoring import Gap
 
 _PROMPT = """You tailor a résumé toward a job's requirements. Rules:
 - The MASTER RÉSUMÉ below is the ONLY source of truth.
-- You MAY reorder, rephrase, select, and emphasize existing content.
+- You MAY reorder and rephrase existing content, and emphasize the parts most
+  relevant to the target requirements.
+- Return EVERY work entry and EVERY project from the master résumé, and for each
+  one KEEP ALL of its bullets — rewritten and re-emphasized, but never dropped.
+  A résumé that comes back with fewer bullets than it went in with is WRONG.
+  Do not delete a bullet because it seems less relevant; rephrase it instead.
+- Keep every skill from the master résumé. You may reorder skills so the ones the
+  job asks for come first, but do not remove any.
 - You MUST NOT invent skills, tools, employers, titles, metrics, dates, or
   certifications. If the résumé does not claim it, it does not go in.
 - If a target requirement cannot be satisfied truthfully, leave it unsatisfied.
@@ -61,7 +68,9 @@ _SCHEMA = {
                     "end_date": {"type": "STRING", "nullable": True},
                     "bullets": {"type": "ARRAY", "items": {"type": "STRING"}},
                 },
-                "required": ["company", "title"],
+                # bullets required so the decoder must emit them; optional, the
+                # model drops the work history's bullets to "select" relevance.
+                "required": ["company", "title", "bullets"],
             },
         },
         "education": {

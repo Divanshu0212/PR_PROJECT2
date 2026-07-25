@@ -44,9 +44,25 @@ function mutate(r: StructuredResume, fn: (draft: StructuredResume) => void): Str
   return copy;
 }
 
+// Backfill array fields a résumé may be missing (e.g. one parsed before the
+// projects field existed), so every component can read them without guarding.
+function normalize(r: StructuredResume): StructuredResume {
+  return {
+    ...r,
+    work: r.work ?? [],
+    education: r.education ?? [],
+    projects: r.projects ?? [],
+    skills: r.skills ?? [],
+    certifications: r.certifications ?? [],
+    emails: r.emails ?? [],
+    phones: r.phones ?? [],
+    urls: r.urls ?? [],
+  };
+}
+
 export const useResumeStore = create<State>((set, get) => ({
   resume: null, provenance: null, style: DEFAULT_STYLE, optimize: null,
-  setResume: (r) => set({ resume: r, optimize: null }),
+  setResume: (r) => set({ resume: normalize(r), optimize: null }),
   setProvenance: (p) => set({ provenance: p }),
   setField: (k, v) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { (d as any)[k] = v; }) })),
   addBullet: (wi) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.work[wi].bullets.push(""); }) })),
@@ -64,7 +80,7 @@ export const useResumeStore = create<State>((set, get) => ({
       gaps: s.optimize?.gaps ?? [], fabricationsBlocked: s.optimize?.fabricationsBlocked ?? 0,
       originalResume: s.resume!,
     },
-    resume: tailored,
+    resume: normalize(tailored),
   })),
   setGaps: (gaps, fabricationsBlocked) => set((s) => ({
     optimize: s.optimize ? { ...s.optimize, gaps, fabricationsBlocked } : {

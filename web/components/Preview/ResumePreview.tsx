@@ -54,7 +54,7 @@ export function ResumePreview({ resume, style, optimize }: {
         if (section === "education" && resume.education.length)
           return <section key="education"><h2 className="mt-4 font-semibold uppercase text-sm text-[color:var(--accent)]">Education</h2>
             {resume.education.map((e, ei) => <div key={ei}>{e.institution}{e.degree ? ` — ${e.degree}` : ""}{e.field ? `, ${e.field}` : ""}{e.end_year ? ` (${e.end_year})` : ""}</div>)}</section>;
-        if (section === "projects" && resume.projects.length)
+        if (section === "projects" && resume.projects?.length)
           return <section key="projects"><h2 className="mt-4 font-semibold uppercase text-sm text-[color:var(--accent)]">Projects</h2>
             {resume.projects.map((p, pi) => (
               <div key={pi} className="mt-2">

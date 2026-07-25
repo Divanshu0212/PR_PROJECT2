@@ -4,7 +4,7 @@ import { useResumeStore } from "@/lib/resumeStore";
 export function ProjectsEditor() {
   const resume = useResumeStore((s) => s.resume);
   const { addProjectBullet, editProjectBullet, removeProjectBullet } = useResumeStore.getState();
-  if (!resume || resume.projects.length === 0) return null;
+  if (!resume || !resume.projects || resume.projects.length === 0) return null;
   return (
     <div className="space-y-3">
       <h2 className="font-label text-[11px] uppercase tracking-[0.18em] text-ink-muted">Projects</h2>

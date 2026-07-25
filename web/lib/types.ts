@@ -16,9 +16,9 @@ export interface StructuredResume {
   skills_prov?: string[][];
 }
 export interface ParseResponse { structured_resume: StructuredResume; provenance_map: unknown; }
-export interface Gap { requirement: { text: string; priority: string }; status: string; }
+export interface Gap { requirement: { text: string; priority: string }; status: "present" | "absent" | "weak"; }
 export interface MatchResult { predicted_score: number; gaps: Gap[]; }
-export interface FabricationReport { total_edits: number; verified_edits: number; fabrication_rate?: number; rejected_edits: { added_text: string; reason: string }[]; }
+export interface FabricationReport { total_edits: number; verified_edits: number; fabrication_rate: number; rejected_edits: { added_text: string; reason: string }[]; }
 export interface TailoredResume { resume: StructuredResume; fabrication_report: FabricationReport; }
 export interface OptimizeResult { match_result: MatchResult; tailored_resume: TailoredResume; final_score: number; previous_score?: number | null; }
 export type JobState = "queued" | "running" | "done" | "error";

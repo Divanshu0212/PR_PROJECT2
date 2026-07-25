@@ -1,6 +1,6 @@
 // web/lib/api.test.ts
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { pollOptimize, startOptimize } from "./api";
+import { BackendUnreachable, pollOptimize, startOptimize } from "./api";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -29,5 +29,17 @@ describe("api client", () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "j1", state: "error", error: "model down" }) });
     vi.stubGlobal("fetch", fetchMock);
     await expect(pollOptimize("j1", { intervalMs: 1, timeoutMs: 1000 })).rejects.toThrow("model down");
+  });
+
+  it("pollOptimize throws a timeout error when the job never leaves running", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "j1", state: "running" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(pollOptimize("j1", { intervalMs: 5, timeoutMs: 20 })).rejects.toThrow("optimize timed out");
+  });
+
+  it("pollOptimize throws BackendUnreachable when fetch rejects", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("network error"));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(pollOptimize("j1", { intervalMs: 1, timeoutMs: 1000 })).rejects.toThrow(BackendUnreachable);
   });
 });

@@ -35,7 +35,10 @@ export async function pollOptimize(
 ): Promise<JobStatus> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const js = await json<JobStatus>(await fetch(`${BASE}/optimize/${jobId}`));
+    let res: Response;
+    try { res = await fetch(`${BASE}/optimize/${jobId}`); }
+    catch { throw new BackendUnreachable("backend unreachable"); }
+    const js = await json<JobStatus>(res);
     if (js.state === "done") return js;
     if (js.state === "error") throw new Error(js.error ?? "optimize failed");
     await new Promise((r) => setTimeout(r, intervalMs));

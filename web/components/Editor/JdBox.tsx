@@ -24,7 +24,9 @@ export function JdBox() {
       const r = done.result!;
       applyOptimize({
         tailored: r.tailored_resume.resume,
-        displayScore: r.display_score,
+        // Coalesce so a missing field from an older backend cannot make the
+        // score undefined and crash the render.
+        displayScore: r.display_score ?? r.final_score ?? 0,
         baselineDisplayScore: r.baseline_display_score ?? null,
         components: r.components ?? [],
         gaps: r.match_result.gaps.map((g) => ({ text: g.requirement.text, priority: g.requirement.priority, status: g.status })),
@@ -52,13 +54,13 @@ export function JdBox() {
       {error && (
         <p className="border-l-2 border-studio pl-2 text-sm text-studio">{error}</p>
       )}
-      {optimize && !busy && (
+      {optimize && !busy && typeof optimize.score === "number" && (
         <div className="space-y-3 rounded-sm border border-hairline bg-white/60 p-3">
           <div className="flex items-baseline gap-2">
             <span className="font-label text-[11px] uppercase tracking-[0.1em] text-ink-muted">Match score</span>
             <span className="text-2xl font-semibold text-ink">{optimize.score.toFixed(0)}</span>
             <span className="text-sm text-ink-muted">/100</span>
-            {optimize.baselineScore !== null && optimize.baselineScore !== undefined && (
+            {typeof optimize.baselineScore === "number" && (
               <span className={`ml-1 rounded-sm px-1.5 py-0.5 font-label text-[11px] ${
                 optimize.score > optimize.baselineScore
                   ? "bg-studio/10 text-studio"
@@ -73,7 +75,7 @@ export function JdBox() {
             )}
           </div>
 
-          {optimize.components.length > 0 && (
+          {(optimize.components?.length ?? 0) > 0 && (
             <div className="space-y-1.5 border-t border-hairline pt-2">
               <span className="font-label text-[11px] uppercase tracking-[0.1em] text-ink-muted">Improvement breakdown</span>
               {optimize.components.map((c) => {
@@ -105,7 +107,7 @@ export function JdBox() {
             Unsourced edits blocked: <span className="text-ink">{optimize.fabricationsBlocked}</span>
             <span className="ml-1 text-xs">(fabrication gate)</span>
           </div>
-          {optimize.gaps.length > 0 && (
+          {(optimize.gaps?.length ?? 0) > 0 && (
             <div className="text-sm text-ink-muted">
               Still missing: <span className="text-ink">{optimize.gaps.filter((g) => g.status !== "present").map((g) => g.text).join(", ")}</span>
             </div>

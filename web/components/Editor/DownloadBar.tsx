@@ -16,7 +16,7 @@ export function DownloadBar() {
     if (!resume) return;
     setBusy(true); setError(null);
     try {
-      const blob = await downloadDocx(resume, style.sectionOrder, style.accent);
+      const blob = await downloadDocx(resume, style.sectionOrder, style.accent, style.hiddenSections);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `${filename}.docx`;
@@ -34,12 +34,12 @@ export function DownloadBar() {
       <h2 className="font-label text-[11px] uppercase tracking-[0.18em] text-ink-muted">Download</h2>
       <div className="flex gap-2">
         <button
-          className="flex-1 rounded-sm border border-hairline bg-white/60 py-2 font-label text-[11px] uppercase tracking-[0.14em] text-ink transition-colors hover:border-studio hover:text-studio"
+          className="flex-1 rounded-sm border border-hairline bg-surface-raised py-2 font-label text-[11px] uppercase tracking-[0.14em] text-ink transition-colors hover:border-studio hover:text-studio"
           onClick={() => window.print()}>
           PDF
         </button>
         <button disabled={busy}
-          className="flex-1 rounded-sm border border-hairline bg-white/60 py-2 font-label text-[11px] uppercase tracking-[0.14em] text-ink transition-colors hover:border-studio hover:text-studio disabled:cursor-not-allowed disabled:text-ink-muted"
+          className="flex-1 rounded-sm border border-hairline bg-surface-raised py-2 font-label text-[11px] uppercase tracking-[0.14em] text-ink transition-colors hover:border-studio hover:text-studio disabled:cursor-not-allowed disabled:text-ink-muted"
           onClick={docx}>
           {busy ? "…" : "DOCX"}
         </button>

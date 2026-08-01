@@ -16,7 +16,7 @@ export function FieldEditors() {
           className="w-full border-b border-hairline bg-transparent pb-1 text-sm text-ink outline-none transition-colors placeholder:text-ink-muted/50 focus:border-studio"
           value={resume.headline ?? ""} onChange={(e) => setField("headline", e.target.value)} placeholder="Headline" />
         <textarea
-          className="min-h-[4.5rem] w-full resize-y rounded-sm border border-hairline bg-white/60 p-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-muted/50 focus:border-studio"
+          className="min-h-[4.5rem] w-full resize-y rounded-sm border border-hairline bg-surface-raised p-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-muted/50 focus:border-studio"
           value={resume.summary ?? ""} onChange={(e) => setField("summary", e.target.value)} placeholder="Summary" />
       </div>
     </div>

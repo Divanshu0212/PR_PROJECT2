@@ -44,9 +44,16 @@ def _bullet(doc: Document, text: str) -> None:
 
 
 def build_docx(resume: StructuredResume, section_order: list[str] | None = None,
-               accent: str = "#b5482a") -> bytes:
-    """Return the résumé as .docx bytes."""
+               accent: str = "#b5482a", hidden_sections: list[str] | None = None) -> bytes:
+    """Return the résumé as .docx bytes.
+
+    `hidden_sections` are dropped from the output entirely — including from the
+    fallback that would otherwise re-append any section missing from
+    `section_order`. This lets the editor's show/hide toggles take effect in the
+    Word file without deleting the underlying résumé data.
+    """
     order = section_order or _DEFAULT_ORDER
+    hide = set(hidden_sections or [])
     color = _accent(accent)
     doc = Document()
 
@@ -116,10 +123,12 @@ def build_docx(resume: StructuredResume, section_order: list[str] | None = None,
                 doc.add_paragraph(tail)
 
     for section in order:
-        render(section)
-    # Render any section the order list omitted, so nothing is silently lost.
+        if section not in hide:
+            render(section)
+    # Render any section the order list omitted, so nothing is silently lost —
+    # unless it was explicitly hidden via the editor's toggle.
     for section in _DEFAULT_ORDER:
-        if section not in order:
+        if section not in order and section not in hide:
             render(section)
 
     buf = io.BytesIO()

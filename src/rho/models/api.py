@@ -38,6 +38,7 @@ class ExportDocxRequest(BaseModel):
     resume: StructuredResume
     section_order: list[str] | None = None
     accent: str = "#b5482a"
+    hidden_sections: list[str] | None = None
 
 
 class ScoreComponent(BaseModel):

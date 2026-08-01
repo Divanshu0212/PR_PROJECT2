@@ -92,7 +92,7 @@ _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 @app.post("/export/docx")
 def export_docx(req: ExportDocxRequest):
     try:
-        data = build_docx(req.resume, req.section_order, req.accent)
+        data = build_docx(req.resume, req.section_order, req.accent, req.hidden_sections)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"docx export failed: {exc}")
     return Response(

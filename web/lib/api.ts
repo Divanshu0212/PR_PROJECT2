@@ -33,12 +33,13 @@ export async function downloadDocx(
   resume: StructuredResume,
   sectionOrder: string[],
   accent: string,
+  hiddenSections: string[] = [],
 ): Promise<Blob> {
   let res: Response;
   try {
     res = await fetch(`${BASE}/export/docx`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resume, section_order: sectionOrder, accent }),
+      body: JSON.stringify({ resume, section_order: sectionOrder, accent, hidden_sections: hiddenSections }),
     });
   } catch { throw new BackendUnreachable("backend unreachable"); }
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);

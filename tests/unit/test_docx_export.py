@@ -53,3 +53,13 @@ def test_omitted_sections_still_render_after_ordered_ones():
     data = build_docx(_resume(), section_order=["skills"])
     text = _text(data)
     assert "CredVault" in text and "Acme" in text and "MIT" in text
+
+
+def test_hidden_sections_are_dropped_entirely():
+    # projects hidden via toggle: gone from output even though data exists and
+    # even though the omitted-section fallback would otherwise re-add it.
+    data = build_docx(_resume(), section_order=["summary", "skills"],
+                      hidden_sections=["projects"])
+    text = _text(data)
+    assert "CredVault" not in text and "Built auth handling 2TB/day" not in text
+    assert "Acme" in text  # non-hidden fallback section still present

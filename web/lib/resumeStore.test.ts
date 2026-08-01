@@ -48,6 +48,43 @@ describe("resume store", () => {
     expect(useResumeStore.getState().style.fontSize).toBe(12);
   });
 
+  it("setTemplate swaps template and applies its default accent", () => {
+    useResumeStore.getState().setTemplate("modern");
+    const s = useResumeStore.getState().style;
+    expect(s.template).toBe("modern");
+    expect(s.accent).toBe("#2f5d8a");
+  });
+
+  it("moveSection reorders and ignores out-of-range indices", () => {
+    useResumeStore.getState().setStyle({ sectionOrder: ["summary", "skills", "work", "projects", "education"] });
+    useResumeStore.getState().moveSection(0, 2);
+    expect(useResumeStore.getState().style.sectionOrder).toEqual(["skills", "work", "summary", "projects", "education"]);
+    const before = useResumeStore.getState().style.sectionOrder;
+    useResumeStore.getState().moveSection(0, 99); // out of range: no-op
+    expect(useResumeStore.getState().style.sectionOrder).toEqual(before);
+  });
+
+  it("toggleSection hides then shows a section", () => {
+    useResumeStore.getState().setStyle({ hiddenSections: [] });
+    useResumeStore.getState().toggleSection("projects");
+    expect(useResumeStore.getState().style.hiddenSections).toContain("projects");
+    useResumeStore.getState().toggleSection("projects");
+    expect(useResumeStore.getState().style.hiddenSections).not.toContain("projects");
+  });
+
+  it("toggleTheme flips light/dark", () => {
+    const start = useResumeStore.getState().theme;
+    useResumeStore.getState().toggleTheme();
+    expect(useResumeStore.getState().theme).not.toBe(start);
+  });
+
+  it("setSidebarWidth clamps to the allowed range", () => {
+    useResumeStore.getState().setSidebarWidth(50);   // below min
+    expect(useResumeStore.getState().sidebarWidth).toBe(320);
+    useResumeStore.getState().setSidebarWidth(9999); // above max
+    expect(useResumeStore.getState().sidebarWidth).toBe(620);
+  });
+
   it("applyOptimize swaps in tailored resume, sets scores and components", () => {
     useResumeStore.getState().applyOptimize({
       tailored: { name: "Jane", work: [{ company: "Acme", title: "Eng", bullets: ["Built X in Python"] }], skills: ["python"], emails: [], phones: [], urls: [], education: [], projects: [], certifications: [] } as any,

@@ -44,7 +44,7 @@ export function JdBox() {
     <div className="space-y-3 border-t border-hairline pt-4">
       <h2 className="font-label text-[11px] uppercase tracking-[0.18em] text-ink-muted">Target role</h2>
       <textarea
-        className="h-32 w-full resize-y rounded-sm border border-hairline bg-white/60 p-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-muted/50 focus:border-studio"
+        className="h-32 w-full resize-y rounded-sm border border-hairline bg-surface-raised p-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-muted/50 focus:border-studio"
         value={jd} onChange={(e) => setJd(e.target.value)} placeholder="Paste the target job description…" />
       <button disabled={!resume || !jd.trim() || busy}
         className="w-full rounded-sm bg-ink py-2.5 font-label text-[11px] uppercase tracking-[0.14em] text-paper transition-colors hover:bg-studio disabled:cursor-not-allowed disabled:bg-ink-muted/30 disabled:text-ink-muted"
@@ -55,7 +55,7 @@ export function JdBox() {
         <p className="border-l-2 border-studio pl-2 text-sm text-studio">{error}</p>
       )}
       {optimize && !busy && typeof optimize.score === "number" && (
-        <div className="space-y-3 rounded-sm border border-hairline bg-white/60 p-3">
+        <div className="space-y-3 rounded-sm border border-hairline bg-surface-raised p-3">
           <div className="flex items-baseline gap-2">
             <span className="font-label text-[11px] uppercase tracking-[0.1em] text-ink-muted">Match score</span>
             <span className="text-2xl font-semibold text-ink">{optimize.score.toFixed(0)}</span>
@@ -107,13 +107,45 @@ export function JdBox() {
             Unsourced edits blocked: <span className="text-ink">{optimize.fabricationsBlocked}</span>
             <span className="ml-1 text-xs">(fabrication gate)</span>
           </div>
-          {(optimize.gaps?.length ?? 0) > 0 && (
-            <div className="text-sm text-ink-muted">
-              Still missing: <span className="text-ink">{optimize.gaps.filter((g) => g.status !== "present").map((g) => g.text).join(", ")}</span>
-            </div>
-          )}
+          {(optimize.gaps?.length ?? 0) > 0 && <KeywordCoverage gaps={optimize.gaps} />}
         </div>
       )}
+    </div>
+  );
+}
+
+// ATS keyword coverage: every requirement pulled from the JD, chipped by whether
+// the résumé already covers it. Green = present, amber = weak/partial, red =
+// missing. A recruiter's ATS scores you on exactly these — this shows the gaps
+// to close before you export.
+function KeywordCoverage({ gaps }: { gaps: { text: string; priority: string; status: string }[] }) {
+  const order = { absent: 0, weak: 1, present: 2 } as const;
+  const sorted = [...gaps].sort(
+    (a, b) => (order[a.status as keyof typeof order] ?? 3) - (order[b.status as keyof typeof order] ?? 3),
+  );
+  const covered = gaps.filter((g) => g.status === "present").length;
+  const style: Record<string, string> = {
+    present: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    weak: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    absent: "border-studio/40 bg-studio-soft text-studio",
+  };
+  const dot: Record<string, string> = { present: "bg-emerald-500", weak: "bg-amber-500", absent: "bg-studio" };
+  return (
+    <div className="space-y-2 border-t border-hairline pt-2">
+      <div className="flex items-baseline justify-between">
+        <span className="font-label text-[11px] uppercase tracking-[0.1em] text-ink-muted">Keyword coverage</span>
+        <span className="font-label text-[11px] tabular-nums text-ink-muted">{covered}/{gaps.length} matched</span>
+      </div>
+      <ul className="flex flex-wrap gap-1.5">
+        {sorted.map((g, i) => (
+          <li key={i}
+            title={`${g.status} · ${g.priority} priority`}
+            className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs ${style[g.status] ?? style.absent}`}>
+            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${dot[g.status] ?? dot.absent}`} />
+            {g.text}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

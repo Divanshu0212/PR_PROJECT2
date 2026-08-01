@@ -4,11 +4,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
+from rho.api.docx_export import build_docx
 from rho.api.jobs import JobStore
 from rho.extraction import extract
 from rho.ingestion import ingest
-from rho.models.api import JobStatus, OptimizeJobRequest, ParseResponse
+from rho.models.api import ExportDocxRequest, JobStatus, OptimizeJobRequest, ParseResponse
 
 logger = logging.getLogger(__name__)
 
@@ -82,3 +84,19 @@ def optimize_status(job_id: str):
     if js is None:
         raise HTTPException(status_code=404, detail="unknown job")
     return js
+
+
+_DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+@app.post("/export/docx")
+def export_docx(req: ExportDocxRequest):
+    try:
+        data = build_docx(req.resume, req.section_order, req.accent)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"docx export failed: {exc}")
+    return Response(
+        content=data,
+        media_type=_DOCX_MIME,
+        headers={"Content-Disposition": 'attachment; filename="resume.docx"'},
+    )

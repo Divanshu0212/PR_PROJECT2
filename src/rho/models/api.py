@@ -34,6 +34,12 @@ class OptimizeJobRequest(BaseModel):
     jd_text: str
 
 
+class ExportDocxRequest(BaseModel):
+    resume: StructuredResume
+    section_order: list[str] | None = None
+    accent: str = "#b5482a"
+
+
 class ScoreComponent(BaseModel):
     """One before/after component pair, for the UI's improvement breakdown."""
 

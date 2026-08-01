@@ -6,6 +6,7 @@ import { ProjectsEditor } from "@/components/Editor/ProjectsEditor";
 import { SkillsEditor } from "@/components/Editor/SkillsEditor";
 import { StyleControls } from "@/components/Editor/StyleControls";
 import { JdBox } from "@/components/Editor/JdBox";
+import { DownloadBar } from "@/components/Editor/DownloadBar";
 import { ResumePreview } from "@/components/Preview/ResumePreview";
 import { useResumeStore } from "@/lib/resumeStore";
 
@@ -15,7 +16,7 @@ export default function Page() {
   const optimize = useResumeStore((s) => s.optimize);
   return (
     <main className="grid min-h-screen grid-cols-1 lg:grid-cols-[minmax(0,26rem)_1fr]">
-      <section className="space-y-6 overflow-y-auto border-hairline bg-desk/40 px-6 py-6 lg:border-r">
+      <section className="no-print space-y-6 overflow-y-auto border-hairline bg-desk/40 px-6 py-6 lg:border-r">
         <header>
           <p className="font-label text-[11px] uppercase tracking-[0.24em] text-studio">rho</p>
           <h1 className="text-xl font-semibold text-ink">Résumé editor</h1>
@@ -34,10 +35,11 @@ export default function Page() {
               <StyleControls />
             </details>
             <JdBox />
+            <DownloadBar />
           </div>
         )}
       </section>
-      <section className="flex justify-center overflow-y-auto bg-paper px-6 py-10">
+      <section className="print-area flex justify-center overflow-y-auto bg-paper px-6 py-10">
         {resume ? (
           <div className="w-full max-w-3xl shadow-[0_1px_2px_rgba(28,27,25,0.06),0_16px_40px_-16px_rgba(28,27,25,0.25)]">
             <ResumePreview resume={resume} style={style} optimize={optimize} />

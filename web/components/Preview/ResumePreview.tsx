@@ -20,7 +20,7 @@ export function ResumePreview({ resume, style, optimize }: {
     ["--accent" as any]: style.accent,
   };
   return (
-    <article style={sheet} className="mx-auto max-w-3xl bg-white text-neutral-900 shadow">
+    <article style={sheet} className="print-sheet mx-auto max-w-3xl bg-white text-neutral-900 shadow">
       <header>
         <h1 className="text-2xl font-bold">{resume.name}</h1>
         {resume.headline && <p className="text-[color:var(--accent)]">{resume.headline}</p>}
@@ -43,7 +43,7 @@ export function ResumePreview({ resume, style, optimize }: {
                     const changed = before !== null && before !== b;
                     return (
                       <li key={bi}>
-                        {changed && <span className="mr-1 text-neutral-400 line-through">{before}</span>}
+                        {changed && <span className="print-hide mr-1 text-neutral-400 line-through">{before}</span>}
                         <span>{b}</span>
                       </li>
                     );
@@ -69,7 +69,7 @@ export function ResumePreview({ resume, style, optimize }: {
                     const changed = before !== null && before !== b;
                     return (
                       <li key={bi}>
-                        {changed && <span className="mr-1 text-neutral-400 line-through">{before}</span>}
+                        {changed && <span className="print-hide mr-1 text-neutral-400 line-through">{before}</span>}
                         <span>{b}</span>
                       </li>
                     );

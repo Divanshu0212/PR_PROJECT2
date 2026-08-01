@@ -10,6 +10,7 @@ dist/
 vendor/ats_screener/node_modules/
 web/node_modules/
 web/.next/
+web/*.tsbuildinfo
 
 eval/progress.json
 

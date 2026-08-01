@@ -29,6 +29,22 @@ export async function startOptimize(resume: StructuredResume, jdText: string): P
   return json<JobStatus>(res);
 }
 
+export async function downloadDocx(
+  resume: StructuredResume,
+  sectionOrder: string[],
+  accent: string,
+): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/export/docx`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resume, section_order: sectionOrder, accent }),
+    });
+  } catch { throw new BackendUnreachable("backend unreachable"); }
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);
+  return res.blob();
+}
+
 export async function pollOptimize(
   jobId: string,
   { intervalMs = 1000, timeoutMs = 120000 }: { intervalMs?: number; timeoutMs?: number } = {},

@@ -108,6 +108,14 @@ export function ResumePreview({ resume, style, optimize }: {
           ))}
         </section> : null;
 
+  const Achievements = () =>
+    !hidden.has("achievements") && resume.achievements?.length
+      ? <section key="achievements"><H>Achievements</H>
+          <ul className="mt-0.5 list-disc pl-5">
+            {resume.achievements.map((a, ai) => <li key={ai}>{a}</li>)}
+          </ul>
+        </section> : null;
+
   const Education = () =>
     !hidden.has("education") && resume.education.length
       ? <section key="education"><H>Education</H>
@@ -117,7 +125,8 @@ export function ResumePreview({ resume, style, optimize }: {
         </section> : null;
 
   const RENDERERS: Record<string, () => React.ReactNode> = {
-    summary: Summary, skills: Skills, work: Work, projects: Projects, education: Education,
+    summary: Summary, skills: Skills, work: Work, projects: Projects,
+    achievements: Achievements, education: Education,
   };
   const ordered = style.sectionOrder.map((k) => <div key={k}>{RENDERERS[k]?.()}</div>);
 

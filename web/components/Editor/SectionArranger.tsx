@@ -4,7 +4,7 @@ import { useResumeStore } from "@/lib/resumeStore";
 
 const LABELS: Record<string, string> = {
   summary: "Summary", skills: "Skills", work: "Experience",
-  projects: "Projects", education: "Education",
+  projects: "Projects", achievements: "Achievements", education: "Education",
 };
 
 // Drag section cards to reorder the printed sheet; toggle the eye to keep a

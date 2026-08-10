@@ -43,6 +43,9 @@ interface State {
   removeBullet: (workIdx: number, bulletIdx: number) => void;
   addSkill: (s: string) => void;
   removeSkill: (s: string) => void;
+  addAchievement: () => void;
+  editAchievement: (idx: number, text: string) => void;
+  removeAchievement: (idx: number) => void;
   addProjectBullet: (projIdx: number) => void;
   editProjectBullet: (projIdx: number, bulletIdx: number, text: string) => void;
   removeProjectBullet: (projIdx: number, bulletIdx: number) => void;
@@ -60,7 +63,7 @@ interface State {
 
 const DEFAULT_STYLE: StyleSettings = {
   fontSize: 14, margin: 48, lineSpacing: 1.4, accent: "#b5482a",
-  sectionOrder: ["summary", "skills", "work", "projects", "education"],
+  sectionOrder: ["summary", "skills", "work", "projects", "achievements", "education"],
   template: "classic",
   hiddenSections: [],
 };
@@ -89,6 +92,18 @@ function savePrefs(p: Prefs) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch { /* quota / disabled */ }
 }
 
+// Merge saved style over defaults, then repair the section order: a persisted
+// order from before a section existed (e.g. "achievements") would silently drop
+// that section, so append any default section the saved order is missing.
+function mergeStyle(saved?: StyleSettings): StyleSettings {
+  const style = { ...DEFAULT_STYLE, ...saved };
+  const order = [...style.sectionOrder];
+  for (const key of DEFAULT_STYLE.sectionOrder) {
+    if (!order.includes(key)) order.push(key);
+  }
+  return { ...style, sectionOrder: order };
+}
+
 function initialTheme(saved: Partial<Prefs>): Theme {
   if (saved.theme) return saved.theme;
   if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) return "dark";
@@ -111,6 +126,7 @@ function normalize(r: StructuredResume): StructuredResume {
     projects: r.projects ?? [],
     skills: r.skills ?? [],
     certifications: r.certifications ?? [],
+    achievements: r.achievements ?? [],
     emails: r.emails ?? [],
     phones: r.phones ?? [],
     urls: r.urls ?? [],
@@ -130,7 +146,7 @@ export const useResumeStore = create<State>((set, get) => {
   };
   return {
   resume: null, provenance: null,
-  style: { ...DEFAULT_STYLE, ..._saved.style },
+  style: mergeStyle(_saved.style),
   optimize: null,
   theme: initialTheme(_saved),
   sidebarWidth: clampWidth(_saved.sidebarWidth ?? SIDEBAR_DEFAULT),
@@ -161,6 +177,9 @@ export const useResumeStore = create<State>((set, get) => {
   removeBullet: (wi, bi) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.work[wi].bullets.splice(bi, 1); }) })),
   addSkill: (skill) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { if (!d.skills.map((x) => x.toLowerCase()).includes(skill.toLowerCase())) d.skills.push(skill); }) })),
   removeSkill: (skill) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.skills = d.skills.filter((x) => x.toLowerCase() !== skill.toLowerCase()); }) })),
+  addAchievement: () => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.achievements = [...(d.achievements ?? []), ""]; }) })),
+  editAchievement: (i, text) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.achievements[i] = text; }) })),
+  removeAchievement: (i) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.achievements.splice(i, 1); }) })),
   addProjectBullet: (pi) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.projects[pi].bullets.push(""); }) })),
   editProjectBullet: (pi, bi, text) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.projects[pi].bullets[bi] = text; }) })),
   removeProjectBullet: (pi, bi) => set((s) => ({ resume: s.resume && mutate(s.resume, (d) => { d.projects[pi].bullets.splice(bi, 1); }) })),

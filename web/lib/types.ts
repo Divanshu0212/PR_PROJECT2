@@ -19,7 +19,8 @@ export interface StructuredResume {
   work: WorkExperience[]; education: Education[];
   projects: Project[];
   skills: string[]; certifications: string[];
-  skills_prov?: string[][];
+  achievements: string[];
+  skills_prov?: string[][]; achievements_prov?: string[][];
 }
 export interface ParseResponse { structured_resume: StructuredResume; provenance_map: unknown; }
 export interface Gap { requirement: { text: string; priority: string }; status: "present" | "absent" | "weak"; }

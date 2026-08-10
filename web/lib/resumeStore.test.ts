@@ -6,7 +6,7 @@ const base = () => ({
   work: [{ company: "Acme", title: "Eng", bullets: ["Built X"] }],
   education: [],
   projects: [{ name: "CredVault", url: null, tech: ["Python"], bullets: ["Built auth"] }],
-  skills: ["python"], certifications: [],
+  skills: ["python"], certifications: [], achievements: [],
 });
 
 beforeEach(() => useResumeStore.getState().setResume(base() as any));
@@ -41,6 +41,14 @@ describe("resume store", () => {
     expect(useResumeStore.getState().resume!.skills).toEqual(["python", "aws"]);
     useResumeStore.getState().removeSkill("python");
     expect(useResumeStore.getState().resume!.skills).toEqual(["aws"]);
+  });
+
+  it("adds, edits and removes achievements", () => {
+    useResumeStore.getState().addAchievement();
+    useResumeStore.getState().editAchievement(0, "Winner, ICPC 2021");
+    expect(useResumeStore.getState().resume!.achievements).toEqual(["Winner, ICPC 2021"]);
+    useResumeStore.getState().removeAchievement(0);
+    expect(useResumeStore.getState().resume!.achievements).toEqual([]);
   });
 
   it("updates style settings", () => {

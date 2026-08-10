@@ -3,6 +3,7 @@ import { UploadDropzone } from "@/components/UploadDropzone";
 import { FieldEditors } from "@/components/Editor/FieldEditors";
 import { WorkEditor } from "@/components/Editor/WorkEditor";
 import { ProjectsEditor } from "@/components/Editor/ProjectsEditor";
+import { AchievementsEditor } from "@/components/Editor/AchievementsEditor";
 import { SkillsEditor } from "@/components/Editor/SkillsEditor";
 import { StyleControls } from "@/components/Editor/StyleControls";
 import { TemplatePicker } from "@/components/Editor/TemplatePicker";
@@ -49,6 +50,7 @@ export default function Page() {
             <SkillsEditor />
             <WorkEditor />
             <ProjectsEditor />
+            <AchievementsEditor />
 
             <div className="border-t border-hairline pt-5"><Panel label="Template"><TemplatePicker /></Panel></div>
             <Panel label="Sections">

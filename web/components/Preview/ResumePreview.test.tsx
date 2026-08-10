@@ -27,6 +27,29 @@ describe("ResumePreview", () => {
     expect(screen.getByText(/Built X in Python/)).toBeDefined();
   });
 
+  it("renders an achievements section", () => {
+    const withAch = { ...resume, achievements: ["Winner, ICPC 2021", "Patent US123"] };
+    const st = { ...style, sectionOrder: ["summary", "achievements", "skills"] };
+    render(<ResumePreview resume={withAch as any} style={st as any} optimize={null} />);
+    expect(screen.getByText("Achievements")).toBeDefined();
+    expect(screen.getByText("Winner, ICPC 2021")).toBeDefined();
+    expect(screen.getByText("Patent US123")).toBeDefined();
+  });
+
+  it("hides a section listed in hiddenSections", () => {
+    const st = { ...style, sectionOrder: ["summary", "skills"], hiddenSections: ["skills"] };
+    render(<ResumePreview resume={resume as any} style={st as any} optimize={null} />);
+    expect(screen.queryByText("python")).toBeNull();
+  });
+
+  it("renders the modern template as two columns", () => {
+    const st = { ...style, template: "modern", sectionOrder: ["summary", "skills", "work", "education"] };
+    const { container } = render(<ResumePreview resume={resume as any} style={st as any} optimize={null} />);
+    // two-column layout emits a CSS grid wrapper the single-column path does not
+    expect(container.querySelector(".grid")).not.toBeNull();
+    expect(screen.getByText("Jane Doe")).toBeDefined();
+  });
+
   it("renders a projects section with name, tech and bullets", () => {
     const withProjects = {
       ...resume,

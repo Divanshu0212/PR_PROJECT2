@@ -1,0 +1,40 @@
+# ── rho backend (FastAPI) ─────────────────────────────────────────────────────
+# Gemini extraction/rewrite backend + ATS-friendly DOCX export.
+#
+# The Gemini client reads GEMINI_API_KEY from a .env file in the working dir
+# (rho.llm.gemini.load_api_keys_from_file). We do NOT bake the key into the
+# image — the entrypoint materialises .env from the GEMINI_API_KEY env var at
+# container start, so the key is supplied at run time via -e / env_file.
+FROM python:3.11-slim AS base
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/models \
+    extraction_backend=gemini
+
+# libgomp1: required by onnxruntime/torch pulled in by docling + sentence-transformers.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Dependency layer: copy only what pip needs to resolve deps, so the (slow,
+# multi-GB torch/docling) install layer caches across source-only changes.
+COPY pyproject.toml README.md ./
+COPY src ./src
+
+# Install the package. python-docx lives in the [dev] extra but the /export/docx
+# route needs it at runtime, so pull it in explicitly for the prod image.
+# Upgrade pip first: the base image's pip (24.0) backtracks badly on this
+# dependency set (docling + torch + sentence-transformers) and can fail to
+# resolve langgraph; a newer resolver installs it cleanly.
+RUN pip install --upgrade pip && pip install . "python-docx>=1.1"
+
+COPY docker/backend-entrypoint.sh /usr/local/bin/backend-entrypoint.sh
+RUN chmod +x /usr/local/bin/backend-entrypoint.sh
+
+EXPOSE 8000
+ENTRYPOINT ["backend-entrypoint.sh"]
+CMD ["uvicorn", "rho.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -48,3 +48,5 @@ class StructuredResume(BaseModel):
     skills: list[str] = []
     skills_prov: list[list[str]] = []
     certifications: list[str] = []
+    achievements: list[str] = []
+    achievements_prov: list[list[str]] = []

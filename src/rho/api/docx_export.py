@@ -17,7 +17,7 @@ from docx.shared import Pt, RGBColor
 
 from rho.models.resume import StructuredResume
 
-_DEFAULT_ORDER = ["summary", "skills", "work", "projects", "education"]
+_DEFAULT_ORDER = ["summary", "skills", "work", "projects", "achievements", "education"]
 
 
 def _accent(hex_str: str) -> RGBColor:
@@ -109,6 +109,10 @@ def build_docx(resume: StructuredResume, section_order: list[str] | None = None,
                     tr.font.size = Pt(10)
                 for b in p.bullets or []:
                     _bullet(doc, b)
+        elif section == "achievements" and resume.achievements:
+            _heading(doc, "Achievements", color)
+            for a in resume.achievements:
+                _bullet(doc, a)
         elif section == "education" and resume.education:
             _heading(doc, "Education", color)
             for e in resume.education:

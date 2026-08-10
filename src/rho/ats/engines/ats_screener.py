@@ -35,6 +35,8 @@ def _to_scoring_input(resume: StructuredResume, jd_text: str) -> dict:
         sections.append("skills")
     if resume.certifications:
         sections.append("certifications")
+    if resume.achievements:
+        sections.append("achievements")
 
     education_text = " ".join(
         " ".join(filter(None, [e.degree, e.field, e.institution, e.end_year]))

@@ -25,7 +25,7 @@ from rho.rewrite import rewrite
 
 def build_prov_from_resume(resume: StructuredResume) -> ProvenanceMap:
     """ProvenanceMap over the résumé's own values, one span per line."""
-    lines = [resume.name, resume.headline or "", resume.summary or "", *resume.skills, *resume.certifications]
+    lines = [resume.name, resume.headline or "", resume.summary or "", *resume.skills, *resume.certifications, *resume.achievements]
     for w in resume.work:
         lines += [w.company, w.title, w.start_date or "", w.end_date or "", *w.bullets]
     for e in resume.education:

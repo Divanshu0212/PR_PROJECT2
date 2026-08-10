@@ -18,6 +18,7 @@ def _resume() -> StructuredResume:
         urls=["github.com/jane"],
         skills=["Python", "Kubernetes"],
         certifications=[],
+        achievements=["Winner, ACM ICPC Regionals 2021"],
         work=[WorkExperience(company="Acme", title="Engineer",
                              start_date="2020", end_date="2024",
                              bullets=["Cut latency 40% by adding a Redis cache"])],
@@ -38,7 +39,8 @@ def test_docx_is_valid_and_contains_all_sections():
     text = _text(data)
     for expected in ["Jane Doe", "Staff Engineer", "Builds reliable systems.",
                      "Python, Kubernetes", "Acme", "Cut latency 40%",
-                     "CredVault", "Built auth handling 2TB/day", "MIT"]:
+                     "CredVault", "Built auth handling 2TB/day",
+                     "Winner, ACM ICPC Regionals 2021", "MIT"]:
         assert expected in text, f"missing {expected!r}"
 
 

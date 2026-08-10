@@ -26,6 +26,9 @@ _PROMPT = """You extract structured data from a resume. Rules:
   titles, or skills — a value that does not appear in the text is a failure.
 - Each skill MUST be a short token as it appears in the resume ("Python",
   "PostgreSQL"), not a sentence about the skill.
+- `achievements` are standalone accomplishments, awards, honors, or recognition
+  NOT tied to one specific job's bullet list (e.g. "Winner, ACM ICPC Regionals
+  2021"). Copy each verbatim. Leave [] if none.
 - Dates in ISO-8601 (2019, 2019-06). Use "" for present.
 - Fill the `reasoning` field first, briefly, then the data fields.
 Resume:
@@ -86,12 +89,13 @@ _FORMAT = {
         },
         "skills": {"type": "array", "items": {"type": "string"}},
         "certifications": {"type": "array", "items": {"type": "string"}},
+        "achievements": {"type": "array", "items": {"type": "string"}},
     },
-    # work/education/projects/skills are required so the decoder must emit the
-    # arrays. Left optional, qwen2.5:14b closes the object after `certifications`
-    # and drops the entire section — a silent fill by omission, which reads
+    # work/education/projects/skills/achievements are required so the decoder must
+    # emit the arrays. Left optional, qwen2.5:14b closes the object early and
+    # drops the entire section — a silent fill by omission, which reads
     # identically to a résumé that genuinely has no such entries.
-    "required": ["reasoning", "name", "work", "education", "projects", "skills"],
+    "required": ["reasoning", "name", "work", "education", "projects", "skills", "achievements"],
 }
 
 # Résumés are long and CPU inference is slow; generous on purpose.

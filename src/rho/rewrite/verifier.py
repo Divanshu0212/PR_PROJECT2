@@ -202,6 +202,9 @@ def verify_against_source(
         fixed.skills, fixed.skills_prov, ledger.accept
     )
     fixed.certifications, _ = _keep_supported(fixed.certifications, [], ledger.accept)
+    fixed.achievements, fixed.achievements_prov = _keep_supported(
+        fixed.achievements, fixed.achievements_prov, ledger.accept
+    )
 
     kept_work = []
     for w in fixed.work:

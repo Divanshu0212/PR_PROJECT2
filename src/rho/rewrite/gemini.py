@@ -199,4 +199,10 @@ def rewrite_schema_gemini(
     data = client.complete_json(
         prompt, response_schema=_SCHEMA, temperature=_REWRITE_TEMPERATURE
     )
-    return to_structured(_coerce(data))
+    tailored = to_structured(_coerce(data))
+    # Achievements (awards/honors) are facts, not prose to tailor. The rewriter
+    # never sees them, so carry them through verbatim rather than let the
+    # reconstruction drop them to [].
+    tailored.achievements = list(resume.achievements)
+    tailored.achievements_prov = [list(p) for p in resume.achievements_prov]
+    return tailored

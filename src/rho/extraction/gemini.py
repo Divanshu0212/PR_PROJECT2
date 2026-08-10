@@ -14,6 +14,9 @@ _PROMPT = """You extract structured data from a resume. Rules:
   titles, or skills — a value that does not appear in the text is a failure.
 - Each skill MUST be a short token as it appears in the resume ("Python",
   "PostgreSQL"), not a sentence about the skill.
+- `achievements` are standalone accomplishments, awards, honors, or recognition
+  NOT tied to one specific job's bullet list (e.g. "Winner, ACM ICPC Regionals
+  2021", "Patent US1234567"). Copy each verbatim. Leave [] if none.
 - Dates in ISO-8601 (2019, 2019-06). Use "" for present.
 - Fill the `reasoning` field first, briefly, then the data fields.
 Resume:
@@ -77,11 +80,12 @@ _SCHEMA = {
         },
         "skills": {"type": "ARRAY", "items": {"type": "STRING"}},
         "certifications": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "achievements": {"type": "ARRAY", "items": {"type": "STRING"}},
     },
-    # projects required so the decoder emits the array (empty if none) rather
-    # than closing the object early and dropping the section — same reason
-    # work/education are required.
-    "required": ["reasoning", "name", "work", "education", "projects", "skills"],
+    # projects/achievements required so the decoder emits the array (empty if
+    # none) rather than closing the object early and dropping the section — same
+    # reason work/education are required.
+    "required": ["reasoning", "name", "work", "education", "projects", "skills", "achievements"],
 }
 
 _client: GeminiClient | None = None

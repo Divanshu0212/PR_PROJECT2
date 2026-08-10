@@ -26,6 +26,7 @@ def attach_provenance(
     for c in r.emails + r.phones + r.urls:
         r.contact_prov += find_prov(c, prov, threshold)
     r.skills_prov = [find_prov(s, prov, threshold) for s in r.skills]
+    r.achievements_prov = [find_prov(a, prov, threshold) for a in r.achievements]
     for w in r.work:
         w.company_prov = find_prov(w.company, prov, threshold)
         w.title_prov = find_prov(w.title, prov, threshold)

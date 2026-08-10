@@ -19,6 +19,8 @@ def hard_content_tokens(resume: StructuredResume) -> list[HardToken]:
         toks.append((s, f"skills[{i}]"))
     for i, c in enumerate(resume.certifications):
         toks.append((c, f"certifications[{i}]"))
+    for i, a in enumerate(resume.achievements):
+        toks.append((a, f"achievements[{i}]"))
     for wi, w in enumerate(resume.work):
         toks.append((w.company, f"work[{wi}].company"))
         toks.append((w.title, f"work[{wi}].title"))

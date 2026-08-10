@@ -171,6 +171,25 @@ def test_verify_keeps_supported_certification():
     assert report.verified_edits == 1
 
 
+# --- the gate: achievements --------------------------------------------
+
+
+def test_verify_rejects_unsupported_achievement():
+    source = StructuredResume(name="A", achievements=["Dean's List 2020"])
+    tailored = StructuredResume(name="A", achievements=["Dean's List 2020", "Nobel Prize"])
+    fixed, report = verify_against_source(tailored, source, _prov("Dean's List 2020"))
+    assert fixed.achievements == ["Dean's List 2020"]
+    assert report.rejected_edits[0].added_text == "Nobel Prize"
+
+
+def test_verify_keeps_supported_achievement():
+    source = StructuredResume(name="A", achievements=[])
+    tailored = StructuredResume(name="A", achievements=["Dean's List 2020"])
+    fixed, report = verify_against_source(tailored, source, _prov("Dean's List 2020"))
+    assert fixed.achievements == ["Dean's List 2020"]
+    assert report.verified_edits == 1
+
+
 # --- the gate: work bullets --------------------------------------------
 
 

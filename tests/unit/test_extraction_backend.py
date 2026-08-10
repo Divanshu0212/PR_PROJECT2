@@ -56,3 +56,18 @@ def test_extract_uses_injected_fn_over_backend(monkeypatch):
     assert resume.skills == ["Python"]
     # provenance still attached by the real attach_provenance
     assert resume.skills_prov[0] != []
+
+
+def test_extract_carries_achievements_with_provenance(monkeypatch):
+    """Achievements flow schema -> to_structured -> attach_provenance."""
+    from rho.extraction import extract
+    from rho.extraction.schema import ExtractionSchema
+    from rho.models.provenance import ProvenanceMap, SourceSpan
+
+    award = "Winner, ACM ICPC Regionals 2021"
+    pm = ProvenanceMap(doc_id="d")
+    pm.add(SourceSpan(doc_id="d", char_start=0, char_end=len(award), raw_text=award))
+    stub = lambda md: ExtractionSchema(reasoning="", name="A", achievements=[award])
+    resume = extract(award, pm, _schema_fn=stub)
+    assert resume.achievements == [award]
+    assert resume.achievements_prov[0] != []

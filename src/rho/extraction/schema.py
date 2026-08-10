@@ -38,6 +38,7 @@ class ExtractionSchema(BaseModel):
     projects: list[ProjectItem] = []
     skills: list[str] = []
     certifications: list[str] = []
+    achievements: list[str] = []
 
 
 def to_structured(es: ExtractionSchema) -> StructuredResume:
@@ -78,4 +79,5 @@ def to_structured(es: ExtractionSchema) -> StructuredResume:
         ],
         skills=es.skills,
         certifications=es.certifications,
+        achievements=es.achievements,
     )

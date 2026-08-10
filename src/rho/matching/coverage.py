@@ -33,7 +33,7 @@ def resume_text_terms(resume) -> list[str]:
     responsively"), and their evidence usually sits in an experience bullet, so
     matching against skills alone pins both coverage signals at 0.
     """
-    terms = list(resume.skills) + list(resume.certifications)
+    terms = list(resume.skills) + list(resume.certifications) + list(resume.achievements)
     if resume.headline:
         terms.append(resume.headline)
     if resume.summary:

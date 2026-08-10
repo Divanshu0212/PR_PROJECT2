@@ -148,4 +148,8 @@ def rewrite_schema_groq(
         gaps_block=_gaps_block(gaps), resume_json=_source_json(resume)
     )
     data = client.complete_json(prompt, temperature=_REWRITE_TEMPERATURE)
-    return to_structured(_coerce(data))
+    tailored = to_structured(_coerce(data))
+    # Achievements are facts, not prose to tailor — carry them through verbatim.
+    tailored.achievements = list(resume.achievements)
+    tailored.achievements_prov = [list(p) for p in resume.achievements_prov]
+    return tailored

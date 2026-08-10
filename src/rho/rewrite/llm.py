@@ -181,4 +181,8 @@ def rewrite_schema(resume: StructuredResume, gaps: list[Gap]) -> StructuredResum
             raw = json.loads(response.read())
     except (urllib.error.URLError, TimeoutError) as exc:
         raise RuntimeError(f"ollama request failed: {exc}") from exc
-    return _parse_response(raw)
+    tailored = _parse_response(raw)
+    # Achievements are facts, not prose to tailor — carry them through verbatim.
+    tailored.achievements = list(resume.achievements)
+    tailored.achievements_prov = [list(p) for p in resume.achievements_prov]
+    return tailored

@@ -20,7 +20,24 @@ from rho.rewrite import rewrite
 
 logger = logging.getLogger(__name__)
 
+# Resolved at call time, not import time, so tests can monkeypatch this name.
 CALIBRATOR_PATH = "eval/calibrator.joblib"
+
+# `CALIBRATOR_PATH` is relative, so it only resolved when the process happened to
+# start in the repo root — in the container (WORKDIR /app) it never did, and every
+# score silently fell back to 0.0. Fall back to a path anchored on this file so
+# the calibrator is found regardless of CWD: src/rho/graph/ -> ../../../eval.
+_REPO_CALIBRATOR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "eval", "calibrator.joblib"
+)
+
+
+def _calibrator_path() -> str | None:
+    """First existing calibrator location, or None when none is installed."""
+    for path in (CALIBRATOR_PATH, _REPO_CALIBRATOR):
+        if os.path.exists(path):
+            return path
+    return None
 
 
 def ingest_node(state):
@@ -48,8 +65,9 @@ def score_node(state):
     rather than being invented here — shared context Section 8, no silent fills.
     """
     mr = state["match_result"]
-    if os.path.exists(CALIBRATOR_PATH):
-        cal = Calibrator().load(CALIBRATOR_PATH)
+    path = _calibrator_path()
+    if path is not None:
+        cal = Calibrator().load(path)
         mr = score_with_calibrator(mr, cal)
     else:
         logger.warning(

@@ -49,6 +49,40 @@ def test_keyword_coverage_still_exact_for_single_tokens():
     assert keyword_coverage(reqs, skills) == 2 / 3
 
 
+def _ranked(lead: list[str], filler_count: int) -> list[str]:
+    """`lead` followed by enough filler to push later entries into the tail band."""
+    return lead + [f"unrelated skill {i}" for i in range(filler_count)]
+
+
+def test_keyword_coverage_rewards_leading_the_requested_skills():
+    """Reordering must move the score.
+
+    The rewriter's only permitted skills edit is reordering, so when coverage
+    flattened the résumé into an unordered set the optimise pass could not change
+    any component: every before/after pair in the UI came back identical.
+    """
+    reqs = ["Docker", "Kubernetes"]
+    buried = _ranked(["Java", "C++", "SQL", "Python", "JavaScript"], 12) + ["Docker", "Kubernetes"]
+    led = _ranked(["Docker", "Kubernetes"], 0) + ["Java", "C++", "SQL", "Python", "JavaScript"]
+
+    assert keyword_coverage(reqs, led) > keyword_coverage(reqs, buried)
+    assert fuzzy_coverage(reqs, led) > fuzzy_coverage(reqs, buried)
+
+
+def test_buried_skill_still_outscores_a_missing_one():
+    """Position discounts evidence; it does not erase it.
+
+    A résumé that lists a requirement late is still a better match than one that
+    never claims it, so the tail weight stays well above zero.
+    """
+    reqs = ["Kubernetes"]
+    buried = _ranked(["Java"], 20) + ["Kubernetes"]
+    missing = _ranked(["Java"], 20)
+
+    assert keyword_coverage(reqs, buried) > keyword_coverage(reqs, missing)
+    assert keyword_coverage(reqs, missing) == 0.0
+
+
 def test_keyword_coverage_ignores_stopwords_in_requirements():
     """"and"/"of" must not manufacture overlap against unrelated résumés."""
     assert keyword_coverage(["search and ecommerce experience"], ["welding and pipefitting"]) == 0.0

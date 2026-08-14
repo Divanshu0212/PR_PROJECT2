@@ -57,6 +57,45 @@ def _content_words(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9+#.]+", text.lower()) if w not in _STOPWORDS}
 
 
+# Coverage used to flatten the résumé into one unordered set of words, so the
+# only edit the rewriter is permitted to make — reordering skills so the ones the
+# JD asks for lead — could not move the score by construction: every "before"
+# equalled its "after". Position now carries weight, matching how a recruiter
+# reads a skills list: the first entries are the claim, the tail is inventory.
+#
+# Tail terms keep most of their credit (0.55, not 0.0): burying a skill does not
+# make it untrue, and a résumé that genuinely lists a requirement should still
+# out-score one that omits it entirely.
+_LEAD_RANK = 5
+_MID_RANK = 15
+_LEAD_WEIGHT = 1.0
+_MID_WEIGHT = 0.8
+_TAIL_WEIGHT = 0.55
+
+
+def _rank_weight(index: int) -> float:
+    if index < _LEAD_RANK:
+        return _LEAD_WEIGHT
+    if index < _MID_RANK:
+        return _MID_WEIGHT
+    return _TAIL_WEIGHT
+
+
+def _weighted_words(resume_terms: list[str]) -> dict[str, float]:
+    """word -> best positional weight across the terms containing it.
+
+    A word keeps its *strongest* occurrence: a skill listed first and repeated in
+    a late bullet is a lead skill, not a tail one.
+    """
+    weights: dict[str, float] = {}
+    for i, term in enumerate(resume_terms):
+        w = _rank_weight(i)
+        for word in _content_words(term):
+            if w > weights.get(word, 0.0):
+                weights[word] = w
+    return weights
+
+
 def keyword_coverage(req_terms: list[str], resume_skills: list[str]) -> float:
     """Mean per-requirement content-word overlap with the résumé.
 
@@ -65,16 +104,20 @@ def keyword_coverage(req_terms: list[str], resume_skills: list[str]) -> float:
     from every résumé, even one saying "key account management". Scoring each
     requirement by the fraction of its content words present keeps exact
     single-token behaviour (1.0 or 0.0) while giving phrases partial credit.
+
+    Each matched word contributes its positional weight (see `_weighted_words`)
+    rather than a flat 1.0, so surfacing a buried-but-relevant skill raises the
+    score without inventing anything.
     """
     if not req_terms:
         return 1.0
-    blob_words = _content_words(" ".join(resume_skills))
+    weights = _weighted_words(resume_skills)
     scores = []
     for term in req_terms:
         words = _content_words(term)
         if not words:
             continue
-        scores.append(len(words & blob_words) / len(words))
+        scores.append(sum(weights.get(w, 0.0) for w in words) / len(words))
     return (sum(scores) / len(scores)) if scores else 0.0
 
 
@@ -86,20 +129,27 @@ def fuzzy_coverage(
     Word-level like `keyword_coverage`: comparing a whole phrase against a
     whole skill string never clears the threshold, so phrasal requirements
     scored 0 regardless of how well the résumé matched.
+
+    Position-weighted like `keyword_coverage`; a fuzzy hit earns the weight of
+    the best-ranked résumé word it matches.
     """
     if not req_terms:
         return 1.0
-    resume_words = _content_words(" ".join(resume_skills))
+    weights = _weighted_words(resume_skills)
     scores = []
     for term in req_terms:
         words = _content_words(term)
         if not words:
             continue
-        hit = sum(
-            1
-            for w in words
-            if any(fuzz.ratio(w, rw) >= threshold for rw in resume_words)
-        )
+        hit = 0.0
+        for w in words:
+            matched = [
+                weight
+                for rw, weight in weights.items()
+                if fuzz.ratio(w, rw) >= threshold
+            ]
+            if matched:
+                hit += max(matched)
         scores.append(hit / len(words))
     return (sum(scores) / len(scores)) if scores else 0.0
 

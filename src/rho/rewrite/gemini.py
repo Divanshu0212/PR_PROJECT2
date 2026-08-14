@@ -28,6 +28,11 @@ _PROMPT = """You tailor a résumé toward a job's requirements. Rules:
   Do not delete a bullet because it seems less relevant; rephrase it instead.
 - Keep every skill from the master résumé. You may reorder skills so the ones the
   job asks for come first, but do not remove any.
+- You MAY add a skill to the skills list ONLY when the master résumé already
+  demonstrates it in a work bullet, a project bullet, or a project's tech list —
+  a tool used in the work but missing from the skills list is under-reported, not
+  new. Copy the term as the résumé spells it. If it is not already written
+  somewhere in the master résumé, it is an invention and must NOT be added.
 - You MUST NOT invent skills, tools, employers, titles, metrics, dates, or
   certifications. If the résumé does not claim it, it does not go in.
 - If a target requirement cannot be satisfied truthfully, leave it unsatisfied.
